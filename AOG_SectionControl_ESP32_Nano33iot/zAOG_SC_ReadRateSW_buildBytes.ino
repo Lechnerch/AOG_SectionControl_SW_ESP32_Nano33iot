@@ -6,7 +6,7 @@ void RateSWRead()
 	//left pressed to low
 	if (RateSWLeftVal < SWOFF)
 	{
-		if (SCSet.RateControlLeftEquiped == 1)
+		if (SCSet.RateControlLeftInst == 1)
 		{
 			if (SectSWcurrentTime > RateSWlastTimeLeft + RateSWDelayTime) 
 			{
@@ -31,7 +31,7 @@ void RateSWRead()
 	//pressed to high
 	if (RateSWLeftVal > SWON)
 		{
-		if (SCSet.RateControlLeftEquiped == 1)
+		if (SCSet.RateControlLeftInst == 1)
 			{
 				if (SectSWcurrentTime > RateSWlastTimeLeft + RateSWDelayTime) 
 				{

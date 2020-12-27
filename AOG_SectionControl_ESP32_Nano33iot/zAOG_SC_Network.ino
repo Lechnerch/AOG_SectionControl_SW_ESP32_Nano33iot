@@ -21,7 +21,7 @@ void WiFi_Start_STA() {
       timeout2 = timeout - (SCSet.timeoutRouter * 500);
   }
   while (WiFi.status() != WL_CONNECTED && millis() < timeout) {
-      delay(300);
+      delay(200);//300
       Serial.print(".");
       if ((millis() > timeout2) && (WiFi.status() != WL_CONNECTED)) {
 #if HardwarePlatform == 0  //ESP32  
@@ -37,12 +37,21 @@ void WiFi_Start_STA() {
       }
       //WIFI LED blink in double time while connecting
       WiFi_LED_blink(2);
+
+      //switches -> set relais
+      if ((SCSet.SectSWInst) || (SCSet.SectMainSWType != 0)) {
+          SectSWRead();
+          SetRelays();
+      }
+      //Rate switches and motor drive
+      if ((SCSet.RateSWLeftInst == 1) || (SCSet.RateSWRightInst == 1)) { RateSWRead(); }
+      if (SCSet.RateControlLeftInst == 0) { motorDrive(); } //if Manual do everytime, not only in timed loop
   }  //connected or timeout  
   
   Serial.println(""); //NL  
   if (WiFi.status() == WL_CONNECTED)
   {
-      delay(200);  
+      delay(300);  
       Serial.println();
       Serial.print("WiFi Client successfully connected to : ");
       if (NetWorkNum == 2) { Serial.println(SCSet.ssid2); } else { Serial.println(SCSet.ssid); }
@@ -62,6 +71,7 @@ void WiFi_Start_STA() {
           WiFi.config(myIP, gwip, gwip, SCSet.mask);
 #endif
           delay(200);
+          delay(100);
           Serial.print("Connected IP - Address : ");
           myIP = WiFi.localIP();
       }
@@ -214,7 +224,7 @@ void UDP_Start()
 
 //-------------------------------------------------------------------------------------------------
 
-
+/*
 void WiFi_connection_check() {
     delay(2);
     if (WiFi.status() == WL_CONNECTED) {
@@ -233,7 +243,7 @@ void WiFi_connection_check() {
         if (WiFiWatchDog > 3) {//reconnect
             LED_WIFI_ON = false;
             digitalWrite(SCSet.LEDWiFi_PIN, !SCSet.LEDWiFi_ON_Level);
-            Serial.print("WiFi error: no data for "); Serial.print(currentTime - DataFromAOGTime);
+            Serial.print("WiFi error: no data for "); Serial.print(now - DataFromAOGTime);
             Serial.print(" ms. No ping to "); for (byte n = 0; n < 4; n++) { Serial.print(SCSet.gwip[n]); Serial.print("."); }
             Serial.println();
             Serial.print("Closing WiFi and try to reconnect to network: ");
@@ -299,3 +309,60 @@ void WiFi_connection_check() {
         }
     }
 }
+*/
+
+//-------------------------------------------------------------------------------------------------
+// Server Index Page for OTA update
+//-------------------------------------------------------------------------------------------------
+
+#if HardwarePlatform == 0
+
+const char* serverIndex =
+"<script src='https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js'></script>"
+"<head>"
+"<title>Firmware updater</title>"
+"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0;\" />\r\n""<style>divbox {background-color: lightgrey;width: 200px;border: 5px solid red;padding:10px;margin: 10px;}</style>"
+"</head>"
+"<body bgcolor=\"#ccff66\">""<font color=\"#000000\" face=\"VERDANA,ARIAL,HELVETICA\">"
+"<h1>ESP firmware update</h1>"
+"ver 4.3 - 10. Mai. 2020<br><br>"
+"<form method='POST' action='#' enctype='multipart/form-data' id='upload_form'>"
+"<br>Create a .bin file with Arduino IDE: Sketch -> Export compiled Binary<br>"
+"<br><b>select .bin file to upload</b>"
+"<br>"
+"<br>"
+"<input type='file' name='update'>"
+"<input type='submit' value='Update'>"
+"</form>"
+"<div id='prg'>progress: 0%</div>"
+"<script>"
+"$('form').submit(function(e){"
+"e.preventDefault();"
+"var form = $('#upload_form')[0];"
+"var data = new FormData(form);"
+" $.ajax({"
+"url: '/update',"
+"type: 'POST',"
+"data: data,"
+"contentType: false,"
+"processData:false,"
+"xhr: function() {"
+"var xhr = new window.XMLHttpRequest();"
+"xhr.upload.addEventListener('progress', function(evt) {"
+"if (evt.lengthComputable) {"
+"var per = evt.loaded / evt.total;"
+"$('#prg').html('progress: ' + Math.round(per*100) + '%');"
+"}"
+"}, false);"
+"return xhr;"
+"},"
+"success:function(d, s) {"
+"console.log('success!')"
+"},"
+"error: function (a, b, c) {"
+"}"
+"});"
+"});"
+"</script>";
+
+#endif

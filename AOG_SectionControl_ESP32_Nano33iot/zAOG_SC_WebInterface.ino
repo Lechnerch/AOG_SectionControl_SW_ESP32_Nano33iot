@@ -1,222 +1,174 @@
 // Wifi variables & definitions
-#define MAX_PACKAGE_SIZE 2048
 char HTML_String[20000];
-char HTTP_Header[150];
-
-// Allgemeine Variablen
-
-int Aufruf_Zaehler = 0;
-
-#define ACTION_SET_SSID        1  
-#define ACTION_SET_SSID2       2
-#define ACTION_SET_OUTPUT_TYPE 3  
-#define ACTION_SET_loadDefault 4
-#define ACTION_SET_Msg          5
-#define ACTION_SET_SectNum      6
-#define ACTION_SET_IOFunctions  7
-#define ACTION_SET_THRESHOLD    8
-#define ACTION_SET_debugmode    9
-#define ACTION_SET_RESTART     13
-#define ACTION_SET_GPIO        14
-#define ACTION_SET_DataTransfVia 21
-//#define ACTION_SET_WiFiLEDon    22
-
 int action;
+long temLong = 0;
+double temDoub = 0;
+
+#define ACTION_LoadDefaultVal   1
+#define ACTION_RESTART          2
+#define ACTION_SET_WS_THRESHOLD 3
 
 //-------------------------------------------------------------------------------------------------
-// 22. Maerz 2020
+//10. Mai 2020
 
-void doWebInterface() {
+void StartServer() {
 
-    unsigned long my_timeout;
-
-    // Check if a client has connected
-    client_page = server.available();
-
-    if (!client_page)  return;
-
-    Serial.println("New Client:");           // print a message out the serial port
-
-    my_timeout = millis() + 250L;
-    while (!client_page.available() && (millis() < my_timeout)) { delay(10); }
-    delay(10);
-    if (millis() > my_timeout)
-    {
-        Serial.println("Client connection timeout!");
-        client_page.flush();
-        client_page.stop();
-        return;
-    }
-
-    //---------------------------------------------------------------------
-    //htmlPtr = 0;
-    char c;
-    if (client_page) {                        // if you get a client,
-        WebInterfaceTimeOut = millis() + 60000; //keep webinterface accessable for more 60 sec                  
-        String currentLine = "";                // make a String to hold incoming data from the client
-        while (client_page.connected()) {       // loop while the client's connected
-            delay(0);
-            if (client_page.available()) {        // if there's bytes to read from the client,
-                char c = client_page.read();        // read a byte, then
-                Serial.print(c);                             // print it out the serial monitor
-                if (c == '\n') {                    // if the byte is a newline character
-
-                  // if the current line is blank, you got two newline characters in a row.
-                  // that's the end of the client HTTP request, so send a response:
-                    if (currentLine.length() == 0) {
-
-                        make_HTML01();  // create Page array
-                       //---------------------------------------------------------------------
-                       // HTTP headers always start with a response code (e.g. HTTP/1.1 200 OK)
-                       // and a content-type so the client knows what's coming, then a blank line:
-                        strcpy(HTTP_Header, "HTTP/1.1 200 OK\r\n");
-                        strcat(HTTP_Header, "Content-Length: ");
-                        strcati(HTTP_Header, strlen(HTML_String));
-                        strcat(HTTP_Header, "\r\n");
-                        strcat(HTTP_Header, "Content-Type: text/html\r\n");
-                        strcat(HTTP_Header, "Connection: close\r\n");
-                        strcat(HTTP_Header, "\r\n");
-
-                        client_page.print(HTTP_Header);
-                        delay(20);
-                        send_HTML();
-                        // break out of the while loop:
-                        break;
-                    }
-                    else {    // if you got a newline, then clear currentLine:
-                        currentLine = "";
-                    }
-                }
-                else if (c != '\r')
-                { // if you got anything else but a carriage return character,
-                    currentLine += c;      // add it to the end of the currentLine
-                    if (currentLine.endsWith("HTTP"))
-                    {
-                        if (currentLine.startsWith("GET "))
-                        {
-                            currentLine.toCharArray(HTML_String, currentLine.length());
-                            Serial.println(); //NL
-                            exhibit("Request : ", HTML_String);
-                            process_Request();
-                        }
-                    }
-                }//end else
-            } //end client available
-        } //end while client.connected
-        // close the connection:
-        client_page.stop();
-        Serial.print("Pagelength : ");
-        Serial.print((long)strlen(HTML_String));
-        Serial.print("   --> Client Disconnected\n");
-    }// end if client 
-}
-
-//-------------------------------------------------------------------------------------------------
-// Process given values
-//-------------------------------------------------------------------------------------------------
-void process_Request()
-{
-    int myIndex;
-
-    if (Find_Start("/?", HTML_String) < 0 && Find_Start("GET / HTTP", HTML_String) < 0)
-    {
-        //nothing to process
-        return;
-    }
-    action = Pick_Parameter_Zahl("ACTION=", HTML_String);
-
-    if (action != ACTION_SET_RESTART) { EEprom_unblock_restart(); }
-    if (action == ACTION_SET_loadDefault) {
-        EEprom_read_default();
-        delay(5);
-    }
-    // WiFi access data
-    if (action == ACTION_SET_SSID) {
-
-        myIndex = Find_End("SSID_MY=", HTML_String);
-        if (myIndex >= 0) {
-            for (int i = 0; i < 24; i++) SCSet.ssid[i] = 0x00;
-            Pick_Text(SCSet.ssid, &HTML_String[myIndex], 24);
+    //return index page which is stored in serverIndex 
+    server.on("/", HTTP_GET, []() {
+        make_HTML01();
+        server.sendHeader("Connection", "close");
+        server.send(200, "text/html", HTML_String);
+        WebIOTimeOut = millis() + long((SCSet.timeoutWebIO * 60000));
+        if (SCSet.debugmode) { 
+            Serial.println("Webpage root"); Serial.print("Timeout WebIO: "); Serial.println(WebIOTimeOut); 
+           // Serial.print("length HTML string: "); Serial.println(HTML_String.lenght); 
         }
-        myIndex = Find_End("Password_MY=", HTML_String);
-        if (myIndex >= 0) {
-            for (int i = 0; i < 24; i++) SCSet.password[i] = 0x00;
-            Pick_Text(SCSet.password, &HTML_String[myIndex], 24);           
-        } 
-        int tempint = Pick_Parameter_Zahl("timeoutRout=", HTML_String);
-        if ((tempint >= 20) && (tempint <= 1000)) { SCSet.timeoutRouter = tempint; }
-/*        char* seachstr = "myip1=";
-        tempint = Pick_Parameter_Zahl(seachstr, HTML_String);
-        if ((tempint > 0) && (tempint < 256)) {
-            SCSet.myip[0] = tempint;
-            strcati(seachstr, tempint);
-            strcat(seachstr, ".");
-            tempint = Pick_Parameter_Zahl(seachstr, HTML_String);
-            if ((tempint > 0) && (tempint < 256)) {
-                SCSet.myip[1] = tempint;
-                strcati(seachstr, tempint);
-                strcat(seachstr, ".");
-                tempint = Pick_Parameter_Zahl(seachstr, HTML_String);
-                if ((tempint > 0) && (tempint < 256)) {
-                    SCSet.myip[2] = tempint;
-                    strcati(seachstr, tempint);
-                    strcat(seachstr, ".");
-                    tempint = Pick_Parameter_Zahl(seachstr, HTML_String);
-                    if ((tempint > 0) && (tempint < 256)) {
-                        SCSet.myip[3] = tempint;
-                        strcati(seachstr, tempint);
-                        strcat(seachstr, ".");
-                        tempint = Pick_Parameter_Zahl(seachstr, HTML_String);
-                    }
+        process_Request();
+        make_HTML01();
+        server.sendHeader("Connection", "close");
+        server.send(200, "text/html", HTML_String);
+        if (SCSet.debugmode) {
+            Serial.println("page reloaded");
+        }
+        });
+#if HardwarePlatform == 0 
+    server.on("/serverIndex", HTTP_GET, []() {
+        server.sendHeader("Connection", "close");
+        server.send(200, "text/html", serverIndex);
+        });
+   
+    //handling uploading firmware file 
+    server.on("/update", HTTP_POST, []() {
+        server.sendHeader("Connection", "close");
+        server.send(200, "text/plain", (Update.hasError()) ? "FAIL" : "OK");
+        ESP.restart();
+        }, []() {
+            HTTPUpload& upload = server.upload();
+            if (upload.status == UPLOAD_FILE_START) {
+                Serial.printf("Update: %s\n", upload.filename.c_str());
+                if (!Update.begin(UPDATE_SIZE_UNKNOWN)) { //start with max available size
+                    Update.printError(Serial);
                 }
             }
-        }*/
-        EEprom_write_all();
-    }
-    if (action == ACTION_SET_SSID2) {
+            else if (upload.status == UPLOAD_FILE_WRITE) {
+                /* flashing firmware to ESP*/
+                if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+                    Update.printError(Serial);
+                }
+            }
+            else if (upload.status == UPLOAD_FILE_END) {
+                if (Update.end(true)) { //true to set the size to the current progress
+                    Serial.printf("Update Success: %u\nRebooting...\n", upload.totalSize);
+                }
+                else {
+                    Update.printError(Serial);
+                }
+            }
+        });
+#endif
+    server.onNotFound(handleNotFound);
 
-        myIndex = Find_End("SSID2_MY=", HTML_String);
-        if (myIndex >= 0) {
+    server.begin();
+}
+
+//---------------------------------------------------------------------
+// Process given values 10. Mai 2020
+//---------------------------------------------------------------------
+void process_Request()
+{
+    action = 0;
+    if (SCSet.debugmode) { Serial.print("From webinterface: number of arguments: "); Serial.println(server.args()); }
+    for (byte n = 0; n < server.args(); n++) {
+        if (SCSet.debugmode) {
+            Serial.print("argName "); Serial.print(server.argName(n));
+            Serial.print(" val: "); Serial.println(server.arg(n));
+        }
+        if (server.argName(n) == "ACTION") {
+            action = int(server.arg(n).toInt());
+            if (SCSet.debugmode) { Serial.print("Action found: "); Serial.println(action); }
+        }
+        if (action != ACTION_RESTART) { EEprom_unblock_restart(); }
+        if (action == ACTION_LoadDefaultVal) {
+            if (SCSet.debugmode) { Serial.println("load default settings from EEPROM"); }
+            EEprom_read_default();
+            delay(2);
+        }
+        //save changes
+        if (server.argName(n) == "Save") {
+            if (SCSet.debugmode) { Serial.println("Save button pressed in webinterface"); }
+            EEprom_write_all();
+        }
+
+        if (server.argName(n) == "SSID_MY") {
+            for (int i = 0; i < 24; i++) SCSet.ssid[i] = 0x00;
+            int tempInt = server.arg(n).length() + 1;
+            server.arg(n).toCharArray(SCSet.ssid, tempInt);
+        }
+        if (server.argName(n) == "Password_MY") {
+            for (int i = 0; i < 24; i++) SCSet.password[i] = 0x00;
+            int tempInt = server.arg(n).length() + 1;
+            server.arg(n).toCharArray(SCSet.password, tempInt);
+        }
+        if (server.argName(n) == "timeoutRout") {
+            argVal = server.arg(n).toInt();
+            if ((argVal >= 20) && (argVal <= 200)) { SCSet.timeoutRouter = byte(argVal); }
+        }
+
+        if (server.argName(n) == "SSID_M2Y") {
             for (int i = 0; i < 24; i++) SCSet.ssid2[i] = 0x00;
-            Pick_Text(SCSet.ssid2, &HTML_String[myIndex], 24);
+            int tempInt = server.arg(n).length() + 1;
+            server.arg(n).toCharArray(SCSet.ssid2, tempInt);
         }
-        myIndex = Find_End("Password2_MY=", HTML_String);
-        if (myIndex >= 0) {
+        if (server.argName(n) == "Password_MY2") {
             for (int i = 0; i < 24; i++) SCSet.password2[i] = 0x00;
-            Pick_Text(SCSet.password2, &HTML_String[myIndex], 24);
+            int tempInt = server.arg(n).length() + 1;
+            server.arg(n).toCharArray(SCSet.password2, tempInt);
         }
-        int tempint = Pick_Parameter_Zahl("timeoutRout2=", HTML_String);
-        if ((tempint >= 1) && (tempint <= 1000)) { SCSet.timeoutRouter2 = tempint; }
-        EEprom_write_all();
-    }
-    if (action == ACTION_SET_DataTransfVia) {
-        //int temp = Pick_Parameter_Zahl("AOGNTRIP=", HTML_String);
-        if (Pick_Parameter_Zahl("DataTransfVia=", HTML_String) == 0) SCSet.DataTransVia = 0;
-        if (Pick_Parameter_Zahl("DataTransfVia=", HTML_String) == 1) SCSet.DataTransVia = 1;
-        if (Pick_Parameter_Zahl("DataTransfVia=", HTML_String) == 4) SCSet.DataTransVia = 4;
-        EEprom_write_all();
-    }
-    if (action == ACTION_SET_IOFunctions) {
-        if (Pick_Parameter_Zahl("useRel=", HTML_String) == 1) { SCSet.SectRelaysEquiped = 1; }
-        else { SCSet.SectRelaysEquiped = 0; }
-        if (Pick_Parameter_Zahl("RelaySprayOn=", HTML_String) == 1) { SCSet.SectRelaysON = 1; }
-        else { SCSet.SectRelaysON = 0; }
-        if (Pick_Parameter_Zahl("useSw=", HTML_String) == 1) { SCSet.SectSWEquiped = 1; }
-        else { SCSet.SectSWEquiped = 0; }
-        if (Pick_Parameter_Zahl("DocOnly=", HTML_String) == 1) { SCSet.DocumentationOnly = 1; }
-        else { SCSet.DocumentationOnly = 0; }
-        if (Pick_Parameter_Zahl("DocSWspr=", HTML_String) == 1) { SCSet.DocSwitchSprayOn = 1; }
-        else { SCSet.DocSwitchSprayOn = 0; }
-        if (Pick_Parameter_Zahl("useRCSw=", HTML_String) == 1) { SCSet.RateSWLeftEquiped = 1; }
-        else { SCSet.RateSWLeftEquiped = 0; }
-        int MSwtyp = Pick_Parameter_Zahl("MSw=", HTML_String);
-        if (MSwtyp >= 0) { SCSet.SectMainSWType = MSwtyp; }
-        assignGPIOs();
-        EEprom_write_all();
-    }
-    if (action == ACTION_SET_THRESHOLD) {
-        unsigned int WSThres_avg = 0;
-        if (SCSet.SectMainSW_PIN < 255) {
+        if (server.argName(n) == "timeoutRout2") {
+            argVal = server.arg(n).toInt();
+            if ((argVal >= 0) && (argVal <= 200)) { SCSet.timeoutRouter2 = byte(argVal); }
+        }
+        if (server.argName(n) == "timeoutWebIO") {
+            temLong = server.arg(n).toInt();
+            if ((temLong >= 2) && (temLong <= 255)) { SCSet.timeoutWebIO = byte(temLong); }
+        }
+        if (server.argName(n) == "DataTransfVia") {
+            SCSet.DataTransVia = byte(server.arg(n).toInt());
+        }
+        if (server.argName(n) == "SectNum") {
+            argVal = server.arg(n).toInt();
+            if ((argVal >= 1) && (argVal <= 100)) { SCSet.SectNum = byte(argVal); }
+        }
+        if (server.argName(n) == "seRelInst") {
+            if (server.arg(n) == "true") { SCSet.SectRelaysInst = 1; }
+            else { SCSet.SectRelaysInst = 0; }
+        }
+                if (server.argName(n) == "seRelON") {
+            if (server.arg(n) == "1") { SCSet.SectRelaysON = 1; }
+            else { SCSet.SectRelaysON = 0; }
+        }
+        if (server.argName(n) == "seSWInst") {
+            if (server.arg(n) == "true") { SCSet.SectSWInst = 1; }
+            else { SCSet.SectSWInst = 0; }
+        }
+        if (server.argName(n) == "DocOnly") {
+            if (server.arg(n) == "true") { SCSet.DocOnly = 1; }
+            else { SCSet.DocOnly = 0; }
+        }
+        if (server.argName(n) == "DocSWspr") {
+            if (server.arg(n) == "1") { SCSet.SectSWAutoOrOn = 1; }
+            else { SCSet.SectSWAutoOrOn = 0; }
+        }
+        if (server.argName(n) == "RCSWInst") {
+            if (server.arg(n) == "true") { SCSet.RateSWLeftInst = 1; }
+            else { SCSet.RateSWLeftInst = 0; }
+        }
+        if (server.argName(n) == "MainSW") {
+            argVal = server.arg(n).toInt();
+            if ((argVal >= 0) && (argVal <= 5)) { SCSet.SectMainSWType = byte(argVal); }
+        }
+        if (action == ACTION_SET_WS_THRESHOLD) {
+            unsigned int WSThres_avg = 0;
             for (int i = 0; i < 8; i++) {
                 WSThres_avg += analogRead(SCSet.SectMainSW_PIN);
                 delay(100);
@@ -224,91 +176,60 @@ void process_Request()
             SCSet.HitchLevelVal = WSThres_avg >> 3;
             EEprom_write_all();
         }
-    }
-    if (action == ACTION_SET_SectNum) {
-        int temp = Pick_Parameter_Zahl("SectNum=", HTML_String);
+        if (server.argName(n) == "debugmode") {
+            if (server.arg(n) == "true") { SCSet.debugmode = true; }
+            else { SCSet.debugmode = false; }
+        }
+        if (server.argName(n) == "debugmSW") {
+            if (server.arg(n) == "true") { SCSet.debugmodeSwitches = true; }
+            else { SCSet.debugmodeSwitches = false; }
+        }
+        if (server.argName(n) == "debugmRel") {
+            if (server.arg(n) == "true") { SCSet.debugmodeRelay = true; }
+            else { SCSet.debugmodeRelay = false; }
+        }
+        if (server.argName(n) == "debugmDatFromAOG") {
+            if (server.arg(n) == "true") { SCSet.debugmodeDataFromAOG = true; }
+            else { SCSet.debugmodeDataFromAOG = false; }
+        }
+        if (server.argName(n) == "debugmDatToAOG") {
+            if (server.arg(n) == "true") { SCSet.debugmodeDataToAOG = true; }
+            else { SCSet.debugmodeDataToAOG = false; }
+        }
 
-        if (temp > 0) { SCSet.SectNum = temp; assignGPIOs(); }
-        EEprom_write_all();
-    }
-    if (action == ACTION_SET_debugmode)
-    {
-        byte tempby = Pick_Parameter_Zahl("debugmode=", HTML_String);
-        if (tempby == 1) {
-            SCSet.debugmode = true;
-        }
-        else { SCSet.debugmode = false; }//no value back from page = 0
-
-        tempby = Pick_Parameter_Zahl("debugmRel=", HTML_String);
-        if (tempby == 1) {
-            SCSet.debugmodeRelay = true;
-        }
-        else { SCSet.debugmodeRelay = false; }//no value back from page = 0
-
-        tempby = Pick_Parameter_Zahl("debugmSw=", HTML_String);
-        if (tempby == 1) {
-            SCSet.debugmodeSwitches = true;
-        }
-        else { SCSet.debugmodeSwitches = false; }//no value back from page = 0
-
-        tempby = Pick_Parameter_Zahl("debugmDatToAOG=", HTML_String);
-        if (tempby == 1) {
-            SCSet.debugmodeDataToAOG = true;
-        }
-        else { SCSet.debugmodeDataToAOG = false; }//no value back from page = 0
-
-        tempby = Pick_Parameter_Zahl("debugmDatFrAOG=", HTML_String);
-        if (tempby == 1) {
-            SCSet.debugmodeDataFromAOG = true;
-        }
-        else { SCSet.debugmodeDataFromAOG = false; }//no value back from page = 0
-        EEprom_write_all();
-    }
-    if (action == ACTION_SET_GPIO) {//crashes ESP, so commended out in HTML code ???
-        char* seachStr = "RP";
-        for (byte num = 0; num < SCSet.SectNum; num++) {        
-            Serial.print("Sect Num: "); Serial.print(num);
-            seachStr = "RP";
-            strcati(seachStr, num);
-            strcat(seachStr, "=");
-            int temp = Pick_Parameter_Zahl(seachStr, HTML_String);
-            Serial.print(" PIN: "); Serial.println(temp);
-            if ((temp >= 0) && (temp <= 255)) { SCSet.Relay_PIN[num] = temp; }
-        }
-        assignGPIOs();
-        delay(50);
-        EEprom_write_all();
-    } 
-	if (action == ACTION_SET_RESTART) {
-		EEprom_block_restart();//prevents from restarting, when webpage is reloaded. Is set to 0, when other ACTION than restart is called
-		delay(1000);
+        if (action == ACTION_RESTART) {
+            Serial.println("reboot ESP32: selected by webinterface");
+            EEprom_block_restart();//prevents from restarting, when webpage is reloaded. Is set to 0, when other ACTION than restart is called
+            delay(1000);
 #if HardwarePlatform == 0
-        WiFi.disconnect();
-        delay(500);
-        ESP.restart();
+            WiFi.disconnect();
+            delay(500);
+            ESP.restart();
 #endif
 #if HardwarePlatform == 1
-        WiFi.end();
-        delay(2000);
-        Serial.println("restarting WiFi");
-        NetWorkNum = 1;
-		WiFi_Start_STA();
-		delay(200);
-        if (my_WiFi_Mode == 0) { NetWorkNum = 2; WiFi_Start_STA(); }
-		delay(200);
-		if (my_WiFi_Mode == 0) {// if failed start AP
-            NetWorkNum = 0;
-			WiFi_Start_AP();
-			delay(100);
-		}
-		delay(200);
+            WiFi.end();
+            delay(2000);
+            Serial.println("restarting WiFi");
+            WiFi_Start_STA();
+            delay(200);
+            if (my_WiFi_Mode == 0) {// if failed start AP
+                WiFi_Start_AP();
+                delay(100);
+            }
+            delay(200);
 #endif
-	}
+        }
+    }
 }
+
+
+
 
 //-------------------------------------------------------------------------------------------------
 // HTML Seite 01 aufbauen
 //-------------------------------------------------------------------------------------------------
+
+
 void make_HTML01() {
 
     strcpy(HTML_String, "<!DOCTYPE html>");
@@ -325,11 +246,11 @@ void make_HTML01() {
     strcat(HTML_String, "Section control software for AgOpenGPS <br>");
     strcat(HTML_String, "supports data via USB / WiFi UDP <br>");
     strcat(HTML_String, "more settings like IPs, UPD ports... in setup zone of INO code<br>");
-    strcat(HTML_String, "(Rev. 4.01 by MTZ8302 Webinterface by WEDER)<br><br><hr>");
+    strcat(HTML_String, "(Rev. 5.01 by MTZ8302 Webinterface by MTZ8302 & WEDER)<br><br><hr>");
 
 
-    //---------------------------------------------------------------------------------------------  
-    //load values of INO setup zone
+    //---------------------------------------------------------------------------------------------
+     //load values of INO setup zone
     strcat(HTML_String, "<h2>Load default values of INO setup zone</h2>");
     strcat(HTML_String, "<form>");
     strcat(HTML_String, "<table>");
@@ -337,81 +258,60 @@ void make_HTML01() {
 
     strcat(HTML_String, "<tr>");
     strcat(HTML_String, "<td colspan=\"2\">Only load default values, does NOT save them</td>");
-    strcat(HTML_String, "<td><button style= \"width:150px\" name=\"ACTION\" value=\"");
-    strcati(HTML_String, ACTION_SET_loadDefault);
-    strcat(HTML_String, "\">Load default values</button></td>");
+    strcat(HTML_String, "<td><input type= \"button\" onclick= \"sendVal('/?ACTION=");
+    strcati(HTML_String, ACTION_LoadDefaultVal);
+    strcat(HTML_String, "')\" style= \"width:150px\" value=\"Load default values\"></button></td>");
     strcat(HTML_String, "</tr>");
-    strcat(HTML_String, "</table>");
-    strcat(HTML_String, "</form>");
-    strcat(HTML_String, "<br><hr>");
-
+    strcat(HTML_String, "</table></form><br><hr>");
 
     //-----------------------------------------------------------------------------------------
-    // WiFi Client Access Data1
-    strcat( HTML_String, "<h2>#1 WiFi Network Client Access Data</h2>");
+    // WiFi Client Access Data
+
+    strcat(HTML_String, "<h2>WiFi Network #1 Client Access Data</h2>");
     strcat(HTML_String, "<form>");
-    strcat(HTML_String, "If access fails, the WiFi network #2 will be tryed<br><b>");
-    strcat(HTML_String,"<br><br><table>");
+    strcat(HTML_String, "</b>If access to network fails, 2nd network will be tried.<br><br><table>");
     set_colgroup(250, 300, 150, 0, 0);
 
     strcat(HTML_String, "<tr>");
-    strcat(HTML_String, "<td><b>#1 Network SSID:</b></td>");
+    strcat(HTML_String, "<td><b>Network SSID:</b></td>");
     strcat(HTML_String, "<td>");
-    strcat(HTML_String, "<input type=\"text\" style= \"width:200px\" name=\"SSID_MY\" maxlength=\"22\" Value =\"");
+    strcat(HTML_String, "<input type=\"text\" onchange=\"sendVal('/?SSID_MY='+this.value)\" style= \"width:200px\" name=\"SSID_MY\" maxlength=\"22\" Value =\"");
     strcat(HTML_String, SCSet.ssid);
     strcat(HTML_String, "\"></td>");
 
-    strcat(HTML_String, "<td><button style= \"width:120px\" name=\"ACTION\" value=\"");
-    strcati(HTML_String, ACTION_SET_SSID);
-    strcat(HTML_String, "\">Apply and Save</button></td>");
+    strcat(HTML_String, "<td><input type= \"button\" onclick= \"sendVal('/?Save=true')\" style= \"width:120px\" value=\"Save\"></button></td>");
     strcat(HTML_String, "</tr>");
 
     strcat(HTML_String, "<tr>");
-    strcat(HTML_String, "<td><b>#1 Password:</b></td>");
+    strcat(HTML_String, "<td><b>Password:</b></td>");
     strcat(HTML_String, "<td>");
-    strcat(HTML_String, "<input type=\"text\" style= \"width:200px\" name=\"Password_MY\" maxlength=\"22\" Value =\"");
+    strcat(HTML_String, "<input type=\"text\" onchange=\"sendVal('/?Password_MY='+this.value)\" style= \"width:200px\" name=\"Password_MY\" maxlength=\"22\" Value =\"");
     strcat(HTML_String, SCSet.password);
     strcat(HTML_String, "\"></td>");
     strcat(HTML_String, "</tr>");
 
-    strcat(HTML_String, "<tr><td colspan=\"3\">&nbsp;</td></tr>");
+    strcat(HTML_String, "<tr> <td colspan=\"3\">&nbsp;</td> </tr>");
     strcat(HTML_String, "<tr>");
-    strcat(HTML_String, "<td colspan=\"3\"><b></b>time, trying to connect to network #1</td></tr>");
-    strcat(HTML_String, "<td colspan=\"3\">after time has passed, network #2 is tryed</td></tr>");
-    strcat(HTML_String, "<tr><td><b>#1 Timeout (s):</td><td><input type = \"number\"  name = \"timeoutRout\" min = \"20\" max = \"1000\" step = \"1\" style= \"width:200px\" value = \"");// placeholder = \"");
+    strcat(HTML_String, "<td colspan=\"3\">time, trying to connect to network</td></tr>");
+    strcat(HTML_String, "<td colspan=\"3\">trying to connect to 2nd network, after time has passed</td></tr>");
+    strcat(HTML_String, "<tr><td><b>Timeout (s):</b></td><td><input type = \"number\" onchange=\"sendVal('/?timeoutRout='+this.value)\" name = \"timeoutRout\" min = \"20\" max = \"200\" step = \"1\" style= \"width:200px\" value = \"");// placeholder = \"");
     strcati(HTML_String, SCSet.timeoutRouter);
     strcat(HTML_String, "\"></td>");
     strcat(HTML_String, "</tr>");
-    strcat(HTML_String, "<tr><td colspan=\"3\">&nbsp;</td></tr>");
-/*
-    strcat(HTML_String, "<tr>");
-    strcat(HTML_String, "<td colspan=\"3\"><b></b>IP Addresses in network #1</td></tr>");
-    strcat(HTML_String, "<tr><td><b>My IP:</td><td><input type = \"text\"  name = \"myip1\" min = \"20\" max = \"1000\" step = \"1\" style= \"width:200px\" value = \"");// placeholder = \"");
-    strcati(HTML_String, SCSet.myip[0]); strcat(HTML_String, "."); strcati(HTML_String, SCSet.myip[1]); strcat(HTML_String, "."); strcati(HTML_String, SCSet.myip[2]); strcat(HTML_String, "."); strcati(HTML_String, SCSet.myip[3]);
-    strcat(HTML_String, "\" pattern=\"^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$\"></td>");
-    strcat(HTML_String, "</tr>");
-    strcat(HTML_String, "<tr><td><b>Gateway IP:</td><td><input type = \"text\"  name = \"gwip1\" min = \"20\" max = \"1000\" step = \"1\" style= \"width:200px\" value = \"");// placeholder = \"");
-    strcati(HTML_String, SCSet.gwip[0]); strcat(HTML_String, "."); strcati(HTML_String, SCSet.gwip[1]); strcat(HTML_String, "."); strcati(HTML_String, SCSet.gwip[2]); strcat(HTML_String, "."); strcati(HTML_String, SCSet.gwip[3]);
-    strcat(HTML_String, "\" pattern=\"^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$\"></td>");
-    strcat(HTML_String, "</tr>");
-    strcat(HTML_String, "<tr><td colspan=\"3\"><b>Gateway IP and My IP should only be different in the last number</td></tr>");
-    strcat(HTML_String, "<tr><td colspan=\"3\">AgOpenGPS IP will be Gateway IP x.x.x.255</td></tr>");
-    strcat(HTML_String, "<tr><td colspan=\"3\">&nbsp;</td> </tr>");
-    */
 
-    strcat(HTML_String, "<tr><td colspan=\"2\"><b>Restart WiFi client for changes to take effect</b></td>");
-    strcat(HTML_String, "<td><button style= \"width:120px\" name=\"ACTION\" value=\"");
-    strcati(HTML_String, ACTION_SET_RESTART);
-    strcat(HTML_String, "\">Restart</button></td>");
+    strcat(HTML_String, "<tr> <td colspan=\"3\">&nbsp;</td> </tr>");
+    strcat(HTML_String, "<tr><td colspan=\"2\"><b>Restart for changes to take effect:</b></td>");
+    strcat(HTML_String, "<td><input type= \"button\" onclick= \"sendVal('/?ACTION=");
+    strcati(HTML_String, ACTION_RESTART);
+    strcat(HTML_String, "')\" style= \"width:120px\" value=\"Restart\"></button></td>");
     strcat(HTML_String, "</tr>");
 
-    strcat(HTML_String, "</table>");
-    strcat(HTML_String, "</form>");
-    strcat(HTML_String, "<br><hr>");
+    strcat(HTML_String, "</table></form><br><hr>");
 
-    //---------------------------------------------------------------------------------------------         
-    // WiFi Client Access Data2
-    strcat( HTML_String, "<h2>#2 WiFi Network Client Access Data</h2>");
+    //-----------------------------------------------------------------------------------------
+    // 2nd WiFi Client Access Data
+
+    strcat(HTML_String, "<h2>WiFi Network #2 Client Access Data</h2>");
     strcat(HTML_String, "<form>");
     strcat(HTML_String, "</b>If access to both networks fails, an accesspoint will be created:<br>SSID: <b>");
     strcat(HTML_String, SCSet.ssid_ap);
@@ -419,399 +319,430 @@ void make_HTML01() {
     set_colgroup(250, 300, 150, 0, 0);
 
     strcat(HTML_String, "<tr>");
-    strcat(HTML_String, "<td><b>#2 Network SSID:</b></td>");
+    strcat(HTML_String, "<td><b>Network SSID 2:</b></td>");
     strcat(HTML_String, "<td>");
-    strcat(HTML_String, "<input type=\"text\" style= \"width:200px\" name=\"SSID2_MY\" maxlength=\"22\" Value =\"");
+    strcat(HTML_String, "<input type=\"text\" onchange=\"sendVal('/?SSID_MY2='+this.value)\" style= \"width:200px\" name=\"SSID_MY\" maxlength=\"22\" Value =\"");
     strcat(HTML_String, SCSet.ssid2);
     strcat(HTML_String, "\"></td>");
 
-    strcat(HTML_String, "<td><button style= \"width:120px\" name=\"ACTION\" value=\"");
-    strcati(HTML_String, ACTION_SET_SSID2);
-    strcat(HTML_String, "\">Apply and Save</button></td>");
+    strcat(HTML_String, "<td><input type= \"button\" onclick= \"sendVal('/?Save=true')\" style= \"width:120px\" value=\"Save\"></button></td>");
     strcat(HTML_String, "</tr>");
 
     strcat(HTML_String, "<tr>");
-    strcat(HTML_String, "<td><b>#2 Password:</b></td>");
+    strcat(HTML_String, "<td><b>Password 2:</b></td>");
     strcat(HTML_String, "<td>");
-    strcat(HTML_String, "<input type=\"text\" style= \"width:200px\" name=\"Password2_MY\" maxlength=\"22\" Value =\"");
+    strcat(HTML_String, "<input type=\"text\" onchange=\"sendVal('/?Password_MY2='+this.value)\" style= \"width:200px\" name=\"Password_MY\" maxlength=\"22\" Value =\"");
     strcat(HTML_String, SCSet.password2);
     strcat(HTML_String, "\"></td>");
     strcat(HTML_String, "</tr>");
 
     strcat(HTML_String, "<tr> <td colspan=\"3\">&nbsp;</td> </tr>");
     strcat(HTML_String, "<tr>");
-    strcat(HTML_String, "<td colspan=\"3\">time, trying to connect to network #2</td></tr>");
+    strcat(HTML_String, "<td colspan=\"3\">time, trying to connect to network</td></tr>");
     strcat(HTML_String, "<td colspan=\"3\">after time has passed access point is opened</td></tr>");
-    strcat(HTML_String, "<tr><td><b>#2 Timeout (s):</td><td><input type = \"number\"  name = \"timeoutRout2\" min = \"1\" max = \"1000\" step = \"1\" style= \"width:200px\" value = \"");// placeholder = \"");
+    strcat(HTML_String, "<tr><td><b>Timeout 2 (s):</b></td><td><input type = \"number\" onchange=\"sendVal('/?timeoutRout2='+this.value)\" name = \"timeoutRout\" min = \"5\" max = \"200\" step = \"1\" style= \"width:200px\" value = \"");// placeholder = \"");
     strcati(HTML_String, SCSet.timeoutRouter2);
     strcat(HTML_String, "\"></td>");
     strcat(HTML_String, "</tr>");
 
     strcat(HTML_String, "<tr> <td colspan=\"3\">&nbsp;</td> </tr>");
-    strcat(HTML_String, "<tr><td colspan=\"2\"><b>Restart WiFi client for changes to take effect</b></td>");
-    strcat(HTML_String, "<td><button style= \"width:120px\" name=\"ACTION\" value=\"");
-    strcati(HTML_String, ACTION_SET_RESTART);
-    strcat(HTML_String, "\">Restart</button></td>");
+    strcat(HTML_String, "<tr><td colspan=\"2\"><b>Restart for changes to take effect:</b></td>");
+    strcat(HTML_String, "<td><input type= \"button\" onclick= \"sendVal('/?ACTION=");
+    strcati(HTML_String, ACTION_RESTART);
+    strcat(HTML_String, "')\" style= \"width:120px\" value=\"Restart\"></button></td>");
     strcat(HTML_String, "</tr>");
 
-    strcat(HTML_String, "</table>");
-    strcat(HTML_String, "</form>");
-    strcat(HTML_String, "<br><hr>");
+    strcat(HTML_String, "</table></form><br><hr>");
 
-    //-----------------------------------------------------------------------------------------		
-    // Data transfer via USB/Wifi 
-    strcat(HTML_String, "<h2>USB or WiFi data transfer</h2>");
+    //-----------------------------------------------------------------------------------------
+    // timeout webinterface
+
+    strcat(HTML_String, "<h2>Webinterface timeout</h2>");
     strcat(HTML_String, "<form>");
-    strcat(HTML_String, "<table>");
+    strcat(HTML_String, "<b>Webinterface needs lots of calculation time, so if switched off, program runs better.</b><br>");
+    strcat(HTML_String, "After this time (minutes) from restart, or last usage, webinterface is turned off.<br><br>");
+    strcat(HTML_String, "Set to 255 to keep active.<br><br><table>");
     set_colgroup(300, 250, 150, 0, 0);
 
-    strcat(HTML_String, "<tr>");
-    strcat(HTML_String, "<td>AOG 2019 and before</td><td><input type = \"radio\" name=\"DataTransfVia\" id=\"JZ\" value=\"0\"");
-    if (SCSet.DataTransVia == 0)strcat(HTML_String, " CHECKED");
-    strcat(HTML_String, "><label for=\"JZ\">USB 8 byte sentence </label></td>");
-    strcat(HTML_String, "<td><button style= \"width:120px\" name=\"ACTION\" value=\"");
-    strcati(HTML_String, ACTION_SET_DataTransfVia);
-    strcat(HTML_String, "\">Apply and Save</button></td>");
+    strcat(HTML_String, "<tr><td><b>Webinterface timeout (min)</b></td><td><input type = \"number\"  onchange=\"sendVal('/?timeoutWebIO='+this.value)\" name = \"timeoutWebIO\" min = \"2\" max = \"255\" step = \"1\" style= \"width:200px\" value = \"");// placeholder = \"");
+    strcati(HTML_String, SCSet.timeoutWebIO);
+    strcat(HTML_String, "\"></td>");
+
+    strcat(HTML_String, "<td><input type= \"button\" onclick= \"sendVal('/?Save=true')\" style= \"width:120px\" value=\"Save\"></button></td>");
     strcat(HTML_String, "</tr>");
 
-    strcat(HTML_String, "<tr>");
-    strcat(HTML_String, "<td>AOG V4</td><td><input type = \"radio\" name=\"DataTransfVia\" id=\"JZ\" value=\"4\"");
-    if (SCSet.DataTransVia == 4)strcat(HTML_String, " CHECKED");
-    strcat(HTML_String, "><label for=\"JZ\">USB 10 byte sentence </label></td></tr>");
+    strcat(HTML_String, "</table></form><br><hr>");
 
-    strcat(HTML_String, "<tr>");
-    strcat(HTML_String, "<td></td><td><input type = \"radio\" name=\"DataTransfVia\" id=\"JZ\" value=\"1\"");
-    if (SCSet.DataTransVia == 1)strcat(HTML_String, " CHECKED");
-    strcat(HTML_String, "><label for=\"JZ\">WiFi (UDP) (default)</label></td></tr>");
-
-    strcat(HTML_String, "</table>");
-    strcat(HTML_String, "</form>");
-    strcat(HTML_String, "<br><hr>");
-
- /*   //---------------------------------------------------------------------------------------------  
-    // WiFi LED light on high/low 
-    strcat(HTML_String, "<h2>WiFi LED light on</h2>");
+    //---------------------------------------------------------------------------------------------
+    // Data transfer via USB/Bluetooth/Wifi/Ethernet
+    strcat(HTML_String, "<h2>Data transfer from/to AgOpenGPS via</h2>");
     strcat(HTML_String, "<form>");
     strcat(HTML_String, "<table>");
-    set_colgroup(150, 270, 150, 0, 0);
+    set_colgroup(250, 300, 150, 0, 0);
 
+    //transfer data via 0 = USB / 1 = USB V5 / 7 = UDP / 8 = UDP 2x / 10 = Ethernet UDP
     strcat(HTML_String, "<tr>");
-    strcat(HTML_String, "<td></td><td><input type = \"radio\" name=\"WiFiLEDon\" id=\"JZ\" value=\"0\"");
-    if (SCSet.LEDWiFi_ON_Level == 0)strcat(HTML_String, " CHECKED");
-    strcat(HTML_String, "><label for=\"JZ\">LOW</label></td>");
-    strcat(HTML_String, "<td><button style= \"width:120px\" name=\"ACTION\" value=\"");
-    strcati(HTML_String, ACTION_SET_WiFiLEDon);
-    strcat(HTML_String, "\">Apply and Save</button></td>");
+    strcat(HTML_String, "<td></td><td><input type = \"radio\" onclick=\"sendVal('/?DataTransfVia=0')\" name=\"DataTransfVia\" id=\"JZ\" value=\"0\"");
+    if (SCSet.DataTransVia == 0)strcat(HTML_String, " CHECKED");
+    strcat(HTML_String, "><label for=\"JZ\">USB AOG V4</label></td>");
+    strcat(HTML_String, "<td><input type= \"button\" onclick= \"sendVal('/?Save=true')\" style= \"width:120px\" value=\"Save\"></button></td>");
     strcat(HTML_String, "</tr>");
 
     strcat(HTML_String, "<tr>");
-    strcat(HTML_String, "<td></td><td><input type = \"radio\" name=\"WiFiLEDon\" id=\"JZ\" value=\"1\"");
-    if (SCSet.LEDWiFi_ON_Level == 1)strcat(HTML_String, " CHECKED");
-    strcat(HTML_String, "><label for=\"JZ\">HIGH</label></td></tr>");
+    strcat(HTML_String, "<td></td><td><input type = \"radio\" onclick=\"sendVal('/?DataTransfVia=1')\" name=\"DataTransfVia\" id=\"JZ\" value=\"1\"");
+    if (SCSet.DataTransVia == 1)strcat(HTML_String, " CHECKED");
+    strcat(HTML_String, "><label for=\"JZ\">USB AOG V5 (not working yet)</label></td></tr>");
 
-    strcat(HTML_String, "</table>");
-    strcat(HTML_String, "</form>");
-    strcat(HTML_String, "<br><hr>");
+    strcat(HTML_String, "<tr>");
+    strcat(HTML_String, "<td></td><td><input type = \"radio\" onclick=\"sendVal('/?DataTransfVia=7')\" name=\"DataTransfVia\" id=\"JZ\" value=\"7\"");
+    if (SCSet.DataTransVia == 7)strcat(HTML_String, " CHECKED");
+    strcat(HTML_String, "><label for=\"JZ\">WiFi (UDP) (default)</label></td></tr>");
+    /*
+        strcat(HTML_String, "<tr>");
+        strcat(HTML_String, "<td></td><td><input type = \"radio\" onclick=\"sendVal('/?DataTransfVia=8')\" name=\"DataTransfVia\" id=\"JZ\" value=\"8\"");
+        if (SCSet.DataTransVia == 8)strcat(HTML_String, " CHECKED");
+        strcat(HTML_String, "><label for=\"JZ\">WiFi (UDP) send message 2x</label></td></tr>");
+
+        strcat(HTML_String, "<tr>");
+        strcat(HTML_String, "<td></td><td><input type = \"radio\" onclick=\"sendVal('/?DataTransfVia=10')\" name=\"DataTransfVia\" id=\"JZ\" value=\"10\"");
+        if (SCSet.DataTransVia == 10)strcat(HTML_String, " CHECKED");
+        strcat(HTML_String, "><label for=\"JZ\">Ethernet (UDP)</label></td></tr>");
     */
-    //---------------------------------------------------------------------------------------------  
-    // Number of sections
+    //strcat(HTML_String, "</table></form><br><hr>");
 
+    /*   //---------------------------------------------------------------------------------------------
+       // WiFi LED light on high/low
+       strcat(HTML_String, "<h2>WiFi LED light on</h2>");
+       strcat(HTML_String, "<form>");
+       strcat(HTML_String, "<table>");
+       set_colgroup(150, 270, 150, 0, 0);
+
+       strcat(HTML_String, "<tr>");
+       strcat(HTML_String, "<td></td><td><input type = \"radio\" name=\"WiFiLEDon\" id=\"JZ\" value=\"0\"");
+       if (SCSet.LEDWiFi_ON_Level == 0)strcat(HTML_String, " CHECKED");
+       strcat(HTML_String, "><label for=\"JZ\">LOW</label></td>");
+       strcat(HTML_String, "<td><button style= \"width:120px\" name=\"ACTION\" value=\"");
+       strcati(HTML_String, ACTION_SET_WiFiLEDon);
+       strcat(HTML_String, "\">Apply and Save</button></td>");
+       strcat(HTML_String, "</tr>");
+
+       strcat(HTML_String, "<tr>");
+       strcat(HTML_String, "<td></td><td><input type = \"radio\" name=\"WiFiLEDon\" id=\"JZ\" value=\"1\"");
+       if (SCSet.LEDWiFi_ON_Level == 1)strcat(HTML_String, " CHECKED");
+       strcat(HTML_String, "><label for=\"JZ\">HIGH</label></td></tr>");
+
+       strcat(HTML_String, "</table>");
+       strcat(HTML_String, "</form>");
+       strcat(HTML_String, "<br><hr>");
+       */
+
+       //---------------------------------------------------------------------------------------------  
+       // Number of sections
+    
     strcat(HTML_String, "<h2>Number of sections</h2>");
 
     strcat(HTML_String, "<form>");
     strcat(HTML_String, "<table>");
-    set_colgroup(300, 250, 150, 0, 0);
+    set_colgroup(250, 300, 150, 0, 0);
 
     strcat(HTML_String, "<tr>");
-    strcat(HTML_String, "<td></td><td><input type = \"number\"  name = \"SectNum\" min = \" 1\" max = \"16\" step = \"1\" style= \"width:100px\" value = \"");// placeholder = \"");
+    strcat(HTML_String, "<td colspan=\"3\">Set number of sections (1-100).</td></tr>");
+    strcat(HTML_String, "<tr><td><b>number of sections</b></td><td><input type = \"number\"  onchange=\"sendVal('/?SectNum='+this.value)\" name = \"SectNum\" min = \"1\" max = \"100\" step = \"1\" style= \"width:200px\" value = \"");
     strcati(HTML_String, SCSet.SectNum);
     strcat(HTML_String, "\"></td>");
-    strcat(HTML_String, "<td><button style= \"width:120px\" name=\"ACTION\" value=\"");
-    strcati(HTML_String, ACTION_SET_SectNum);
-    strcat(HTML_String, "\">Apply and Save</button></td>");
+
+    strcat(HTML_String, "<td><input type= \"button\" onclick= \"sendVal('/?Save=true')\" style= \"width:120px\" value=\"Save\"></button></td>");
     strcat(HTML_String, "</tr>");
+
     strcat(HTML_String, "</table></form><br><hr>");
 
 
-    //---------------------------------------------------------------------------------------------  
+    //---------------------------------------------------------------------------------------------
     // Checkboxes IO functions
     strcat(HTML_String, "<h2>Section control uses</h2>");
     strcat(HTML_String, "<form>");
     strcat(HTML_String, "<table>");
-    set_colgroup(300, 50, 200, 150, 0);
+    set_colgroup(150, 250, 150, 145, 150);
 
+    //relais
     strcat(HTML_String, "<tr>");
-    strcat(HTML_String, "<td></td><td colspan=\"2\"><input type=\"checkbox\" name=\"useRel\" id = \"funct\" value = \"1\" ");
-    if (SCSet.SectRelaysEquiped == 1) strcat(HTML_String, "checked ");
+    strcat(HTML_String, "<td colspan=\"2\"><b>Relay output</b></td><td colspan=\"2\"><input type=\"checkbox\" onclick=\"sendVal('/?seRelInst='+this.checked)\" name=\"seRelInst\" id = \"Part\" value = \"1\" ");
+    if (SCSet.SectRelaysInst == 1) strcat(HTML_String, "checked ");
     strcat(HTML_String, "> ");
-    strcat(HTML_String, "<label for =\"funct\">Relay output</label>");
+    strcat(HTML_String, "<label for =\"Part\"> installed</label>");
     strcat(HTML_String, "</td>");
-    strcat(HTML_String, "<td><button style= \"width:120px\" name=\"ACTION\" value=\"");
-    strcati(HTML_String, ACTION_SET_IOFunctions);
-    strcat(HTML_String, "\">Apply and Save</button></td>");
-
-    if (SCSet.SectRelaysEquiped == 1) {
-        //strcat(HTML_String, "<tr><td colspan=\"2\"></td></tr>");
-        strcat(HTML_String, "<tr><td>Relays spray on</td><td></td><td><input type = \"radio\" name=\"RelaySprayOn\" id=\"JZ\" value=\"0\"");
-        if (SCSet.SectRelaysON == 0)strcat(HTML_String, " CHECKED");
-        strcat(HTML_String, "><label for=\"JZ\">LOW</label></td>");
-        strcat(HTML_String, "</tr>");
-        strcat(HTML_String, "<tr>");
-        strcat(HTML_String, "<td></td><td></td><td><input type = \"radio\" name=\"RelaySprayOn\" id=\"JZ\" value=\"1\"");
-        if (SCSet.SectRelaysON == 1)strcat(HTML_String, " CHECKED");
-        strcat(HTML_String, "><label for=\"JZ\">HIGH</label></td></tr>");
-        strcat(HTML_String, "<tr> <td colspan=\"3\">&nbsp;</td> </tr>");
-    }
+    strcat(HTML_String, "<td><input type= \"button\" onclick= \"sendVal('/?Save=true')\" style= \"width:120px\" value=\"Save\"></button></td>");
 
     strcat(HTML_String, "<tr>");
-    strcat(HTML_String, "<td></td><td colspan=\"2\"><input type=\"checkbox\" name=\"useSw\" id = \"MSw\" value = \"1\" ");
-    if (SCSet.SectSWEquiped == 1) strcat(HTML_String, "checked ");
-    strcat(HTML_String, "> ");
-    strcat(HTML_String, "<label for =\"MSw\">Switches for Sections</label>");
-    strcat(HTML_String, "</td></tr>");
+    strcat(HTML_String, "<td></td><td>if installed</td><td><input type = \"radio\" onclick=\"sendVal('/?seRelON=0')\" name=\"seRelON\" id=\"JZ\" value=\"0\"");
+    if (SCSet.SectRelaysON == 0)strcat(HTML_String, " CHECKED");
+    strcat(HTML_String, "><label for=\"JZ\"> LOW</label></td>");
+    strcat(HTML_String, "</tr>");
+
+    strcat(HTML_String, "<td></td><td>relays spray on</td><td><input type = \"radio\" onclick=\"sendVal('/?seRelON=1')\" name=\"seRelON\" id=\"JZ\" value=\"1\"");
+    if (SCSet.SectRelaysON == 1)strcat(HTML_String, " CHECKED");
+    strcat(HTML_String, "><label for=\"JZ\"> HIGH</label></td>");
+    strcat(HTML_String, "</tr>");
+
     strcat(HTML_String, "<tr> <td colspan=\"3\">&nbsp;</td> </tr>");
 
-    if (SCSet.SectSWEquiped == 1) {        
-        strcat(HTML_String, "<tr><td colspan=\"4\">Use as section control,<br>or documentation = AgOpenGPS writes status of input switches.</td></tr>");
-        strcat(HTML_String, "<tr>");
-        strcat(HTML_String, "<td></td><td colspan=\"2\"><input type=\"checkbox\" name=\"DocOnly\" id = \"DO\" value = \"1\"");
-        if (SCSet.DocumentationOnly == 1) strcat(HTML_String, " CHECKED");
-        strcat(HTML_String, "> ");
-        strcat(HTML_String, "<label for =\"DO\">Documentation only</label>");
-        strcat(HTML_String, "</td></tr>");
-        if (SCSet.DocumentationOnly) {
-            strcat(HTML_String, "<tr><td>Switches spray on</td><td></td><td><input type = \"radio\" name=\"DocSWspr\" id=\"DoSW\" value=\"0\"");
-            if (SCSet.DocSwitchSprayOn == 0)strcat(HTML_String, " CHECKED");
-            strcat(HTML_String, "><label for=\"DoSW\">LOW</label></td>");
-            strcat(HTML_String, "</tr>");
-            strcat(HTML_String, "<tr>");
-            strcat(HTML_String, "<td></td><td></td><td><input type = \"radio\" name=\"DocSWspr\" id=\"DoSW\" value=\"1\"");
-            if (SCSet.DocSwitchSprayOn == 1)strcat(HTML_String, " CHECKED");
-            strcat(HTML_String, "><label for=\"DoSW\">HIGH</label></td></tr>");
-
-
-        }        
-        strcat(HTML_String, "<tr> <td colspan=\"3\">&nbsp;</td> </tr>");
-    }
+    //switches
+    strcat(HTML_String, "<tr>");
+    strcat(HTML_String, "<td colspan=\"2\"><b>Switches for sections</b></td><td colspan=\"2\"><input type=\"checkbox\" onclick=\"sendVal('/?seSWInst='+this.checked)\" name=\"seSWInst\" id = \"Part\" value = \"1\" ");
+    if (SCSet.SectSWInst == 1) strcat(HTML_String, "checked ");
+    strcat(HTML_String, "> ");
+    strcat(HTML_String, "<label for =\"Part\"> installed</label>");
+    strcat(HTML_String, "</td>");
+    strcat(HTML_String, "<td><input type= \"button\" onclick= \"sendVal('/?Save=true')\" style= \"width:120px\" value=\"Save\"></button></td>");
 
     strcat(HTML_String, "<tr>");
-    strcat(HTML_String, "<td></td><td colspan=\"3\"><input type=\"checkbox\" name=\"useRCSw\" id = \"RCS\" value = \"1\" ");
-    if (SCSet.RateSWLeftEquiped == 1) strcat(HTML_String, "checked ");
+    strcat(HTML_String, "<td></td><td>if installed</td><td><input type = \"radio\" onclick=\"sendVal('/?DocSWspr=0')\" name=\"DocSWspr\" id=\"JZ\" value=\"0\"");
+    if (SCSet.SectSWAutoOrOn == 0)strcat(HTML_String, " CHECKED");
+    strcat(HTML_String, "><label for=\"JZ\"> LOW</label></td>");
+    strcat(HTML_String, "</tr>");
+
+    strcat(HTML_String, "<td></td><td>switches spray on</td><td><input type = \"radio\" onclick=\"sendVal('/?DocSWspr=1')\" name=\"DocSWspr\" id=\"JZ\" value=\"1\"");
+    if (SCSet.SectSWAutoOrOn == 1)strcat(HTML_String, " CHECKED");
+    strcat(HTML_String, "><label for=\"JZ\"> HIGH</label></td>");
+    strcat(HTML_String, "</tr>");
+
+    strcat(HTML_String, "<tr> <td colspan=\"3\">&nbsp;</td> </tr>");
+
+    strcat(HTML_String, "<tr><td colspan=\"4\"><b>Use as section control, or documentation<br>doc = AgOpenGPS writes status of input switches.</b></td></tr>");
+    strcat(HTML_String, "<tr>");
+    strcat(HTML_String, "<td colspan=\"2\"></td><td colspan=\"2\"><input type=\"checkbox\" onclick=\"sendVal('/?DocOnly='+this.checked)\" name=\"DocOnly\" id = \"Part\" value = \"1\" ");
+    if (SCSet.DocOnly == 1) strcat(HTML_String, "checked ");
     strcat(HTML_String, "> ");
-    strcat(HTML_String, "<label for =\"RCS\">Rate Control Switch only for +/- Motor valve</label>");
+    strcat(HTML_String, "<label for =\"Part\"> Documentation only</label>");
     strcat(HTML_String, "</td></tr>");
 
-    //Main SW
     strcat(HTML_String, "<tr> <td colspan=\"3\">&nbsp;</td> </tr>");
-    strcat(HTML_String, "<tr><td><b>Main switch for section control</b></td>");
-    strcat(HTML_String, "<td colspan=\"3\"><input type = \"radio\" name=\"MSw\" id=\"MS\" value=\"0\"");
+
+
+    //rate SW
+    strcat(HTML_String, "<tr>");
+    strcat(HTML_String, "<td colspan=\"4\"><b>Rate Control Switch only for +/- Motor valve</b></td>");
+    strcat(HTML_String, "<tr><td colspan=\"2\"></td><td><input type = \"checkbox\" onclick=\"sendVal('/?RCSWInst='+this.checked)\" name=\"RCSWInst\" id = \"RCS\" value = \"1\" ");
+    if (SCSet.RateSWLeftInst == 1) strcat(HTML_String, "checked ");
+    strcat(HTML_String, "> ");
+    strcat(HTML_String, "<label for =\"RCS\"> installed</label>");
+    strcat(HTML_String, "</td>");
+    strcat(HTML_String, "<td></td><td><input type= \"button\" onclick= \"sendVal('/?Save=true')\" style= \"width:120px\" value=\"Save\"></button></td>");
+
+    strcat(HTML_String, "<tr> <td colspan=\"3\">&nbsp;</td> </tr>");
+
+    //main SW
+    strcat(HTML_String, "<tr><td colspan=\"4\"><b>Main switch for section control</b></td>");
+    strcat(HTML_String, "<tr>");
+    strcat(HTML_String, "<td></td><td colspan=\"3\"><input type = \"radio\" onclick=\"sendVal('/?MainSW=0')\" name=\"MainSW\" id=\"MS\" value=\"0\"");
     if (SCSet.SectMainSWType == 0)strcat(HTML_String, " CHECKED");
-    strcat(HTML_String, "><label for=\"MS\">none</label></td></tr>");
+    strcat(HTML_String, "><label for=\"MS\"> none</label></td>");
+    strcat(HTML_String, "<td><input type= \"button\" onclick= \"sendVal('/?Save=true')\" style= \"width:120px\" value=\"Save\"></button></td>");
+    strcat(HTML_String, "</tr>");
 
-    strcat(HTML_String, "<tr><td></td>");
-    strcat(HTML_String, "<td colspan=\"3\"><input type = \"radio\" name=\"MSw\" id=\"MS\" value=\"1\"");
+    strcat(HTML_String, "<tr>");
+    strcat(HTML_String, "<td></td><td colspan=\"3\"><input type = \"radio\" onclick=\"sendVal('/?MainSW=1')\" name=\"MainSW\" id=\"MS\" value=\"1\"");
     if (SCSet.SectMainSWType == 1)strcat(HTML_String, " CHECKED");
-    strcat(HTML_String, "><label for=\"MS\">(ON)-OFF-(ON) toggle switch or push buttons</label></td></tr>");
+    strcat(HTML_String, "><label for=\"MS\"> (ON)-OFF-(ON) toggle switch or push buttons</label></td></tr>");
 
-    strcat(HTML_String, "<tr><td></td>");
-    strcat(HTML_String, "<td colspan=\"3\"><input type = \"radio\" name=\"MSw\" id=\"MS\" value=\"2\"");
+    strcat(HTML_String, "<tr>");
+    strcat(HTML_String, "<td></td><td colspan=\"3\"><input type = \"radio\" onclick=\"sendVal('/?MainSW=2')\" name=\"MainSW\" id=\"MS\" value=\"2\"");
     if (SCSet.SectMainSWType == 2)strcat(HTML_String, " CHECKED");
-    strcat(HTML_String, "><label for=\"MS\">connected to hitch level sensor</label></td></tr>");
+    strcat(HTML_String, "><label for=\"MS\"> connected to hitch level sensor</label></td></tr>");
 
-    strcat(HTML_String, "<tr><td></td>");
-    strcat(HTML_String, "<td colspan=\"3\"><input type = \"radio\" name=\"MSw\" id=\"MS\" value=\"3\"");
+    strcat(HTML_String, "<tr>");
+    strcat(HTML_String, "<td></td><td colspan=\"3\"><input type = \"radio\" onclick=\"sendVal('/?MainSW=3')\" name=\"MainSW\" id=\"MS\" value=\"3\"");
     if (SCSet.SectMainSWType == 3)strcat(HTML_String, " CHECKED");
-    strcat(HTML_String, "><label for=\"MS\">inverted hitch level sensor</label></td></tr>");
-    
+    strcat(HTML_String, "><label for=\"MS\"> inverted hitch level sensor</label></td></tr>");
+
+    strcat(HTML_String, "<tr> <td colspan=\"3\">&nbsp;</td> </tr>");
+
     //analog MAIN SW from hitch level
     if (SCSet.SectMainSWType > 1) {
         strcat(HTML_String, "<tr>");
-        strcat(HTML_String, "<td><br>Analog Main Section control Threshold value</td>");
-        strcat(HTML_String, "<td><divbox align=\"right\"><font size=\"+2\"><b>");
-        strcati(HTML_String, (SCSet.HitchLevelVal));
-        strcat(HTML_String, "</b></font></divbox></td><td>0-4095</td>");
+        strcat(HTML_String, "<td colspan=\"4\"><br>Analog Main Section control Threshold value</td></tr>");
+        strcat(HTML_String, "<tr> <td colspan=\"3\">&nbsp;</td> </tr>");
 
-        strcat(HTML_String, "<tr>");
-        strcat(HTML_String, "<td><b>Set Threshold</b></td>");
-        strcat(HTML_String, "<td><button style= \"width:120px\" name=\"ACTION\" value=\"");
-        strcati(HTML_String, ACTION_SET_THRESHOLD);
-        strcat(HTML_String, "\">Use Current</button></td>");
-        strcat(HTML_String, "<td colspan=\"2\">Set Threshold value to current position</td></tr>");
+        strcat(HTML_String, "<tr><td></td><td><divbox align=\"right\"><font size=\"+2\"><b>");
+        strcati(HTML_String, (SCSet.HitchLevelVal));
+        strcat(HTML_String, "</b></font></divbox></td><td colspan=\"2\">0-4095</td>");
+        //Refresh button
+        strcat(HTML_String, "<td><input type= \"button\" onclick= \"location.reload()\" style= \"width:120px\" value=\"Refresh\"></button></td>");
+        strcat(HTML_String, "</tr>");
+
+        strcat(HTML_String, "<tr> <td colspan=\"3\">&nbsp;</td> </tr>");
+        //set treshold
+        strcat(HTML_String, "<tr><td></td><td><input type= \"button\" onclick= \"sendVal('/?ACTION=");
+        strcati(HTML_String, ACTION_SET_WS_THRESHOLD);
+        strcat(HTML_String, "')\" style= \"width:200px\" value=\"Use Current\"></button></td></tr>");
+        strcat(HTML_String, "<tr><td colspan=\"4\"><b>Put your tool in the middle between ON and OFF position.</b></td>");
     }
-    strcat(HTML_String, "</table>");
-    strcat(HTML_String, "</form>");
-    strcat(HTML_String, "<br><hr>");
+
+    strcat(HTML_String, "</table></form><br><hr>");
 
     //-------------------------------------------------------------
-  // Checkboxes debugmode
+    // Checkboxes debugmode
     strcat(HTML_String, "<h2>Debugmode</h2>");
     strcat(HTML_String, "<form>");
     strcat(HTML_String, "<table>");
     set_colgroup(300, 250, 150, 0, 0);
 
     strcat(HTML_String, "<tr> <td colspan=\"2\">debugmode sends messages to USB serial</td>");
-    strcat(HTML_String, "<td><button style= \"width:120px\" name=\"ACTION\" value=\"");
-    strcati(HTML_String, ACTION_SET_debugmode);
-    strcat(HTML_String, "\">Apply and Save</button></td></tr>");
+    strcat(HTML_String, "<td><input type= \"button\" onclick= \"sendVal('/?Save=true')\" style= \"width:120px\" value=\"Save\"></button></td>");
 
     strcat(HTML_String, "<tr>");
-    strcat(HTML_String, "<td colspan=\"2\"><input type=\"checkbox\" name=\"debugmode\" id = \"Part\" value = \"1\" ");
+    strcat(HTML_String, "<td colspan=\"2\"><input type=\"checkbox\" onclick=\"sendVal('/?debugmode='+this.checked)\" name=\"debugmode\" id = \"Part\" value = \"1\" ");
     if (SCSet.debugmode == 1) strcat(HTML_String, "checked ");
     strcat(HTML_String, "> ");
-    strcat(HTML_String, "<label for =\"Part\"> debugmode on</label>");
+    strcat(HTML_String, "<label for =\"Part\"> general debugmode on</label>");
     strcat(HTML_String, "</td></tr>");
 
     strcat(HTML_String, "<tr>");
-    strcat(HTML_String, "<td colspan=\"3\"><input type=\"checkbox\" name=\"debugmRel\" id = \"Part\" value = \"1\" ");
-    if (SCSet.debugmodeRelay == 1) strcat(HTML_String, "checked ");
-    strcat(HTML_String, "> ");
-    strcat(HTML_String, "<label for =\"Part\"> debugmode Relais</label>");
-    strcat(HTML_String, "</td></tr>");
-
-    strcat(HTML_String, "<tr>");
-    strcat(HTML_String, "<td colspan=\"3\"><input type=\"checkbox\" name=\"debugmSw\" id = \"Part\" value = \"1\" ");
+    strcat(HTML_String, "<td colspan=\"3\"><input type=\"checkbox\" onclick=\"sendVal('/?debugmSW='+this.checked)\" name=\"debugmSW\" id = \"Part\" value = \"1\" ");
     if (SCSet.debugmodeSwitches == 1) strcat(HTML_String, "checked ");
     strcat(HTML_String, "> ");
-    strcat(HTML_String, "<label for =\"Part\"> debugmode Switches</label>");
+    strcat(HTML_String, "<label for =\"Part\"> debugmode switches on (display switch status)</label>");
     strcat(HTML_String, "</td></tr>");
 
     strcat(HTML_String, "<tr>");
-    strcat(HTML_String, "<td colspan=\"3\"><input type=\"checkbox\" name=\"debugmDatToAOG\" id = \"Part\" value = \"1\" ");
-    if (SCSet.debugmodeDataToAOG == 1) strcat(HTML_String, "checked ");
+    strcat(HTML_String, "<td colspan=\"3\"><input type=\"checkbox\" onclick=\"sendVal('/?debugmRel='+this.checked)\" name=\"debugmRel\" id = \"Part\" value = \"1\" ");
+    if (SCSet.debugmodeRelay == 1) strcat(HTML_String, "checked ");
     strcat(HTML_String, "> ");
-    strcat(HTML_String, "<label for =\"Part\"> debugmode Data to AgOpenGPS</label>");
+    strcat(HTML_String, "<label for =\"Part\"> debugmode relais on</label>");
     strcat(HTML_String, "</td></tr>");
 
     strcat(HTML_String, "<tr>");
-    strcat(HTML_String, "<td colspan=\"3\"><input type=\"checkbox\" name=\"debugmDatFrAOG\" id = \"Part\" value = \"1\" ");
+    strcat(HTML_String, "<td colspan=\"3\"><input type=\"checkbox\" onclick=\"sendVal('/?debugmDatFromAOG='+this.checked)\" name=\"debugmDatFromAOG\" id = \"Part\" value = \"1\" ");
     if (SCSet.debugmodeDataFromAOG == 1) strcat(HTML_String, "checked ");
     strcat(HTML_String, "> ");
-    strcat(HTML_String, "<label for =\"Part\"> debugmode Data from AgOpenGPS</label>");
+    strcat(HTML_String, "<label for =\"Part\"> debugmode data from AgOpenGPS on</label>");
     strcat(HTML_String, "</td></tr>");
 
-    strcat(HTML_String, "</table>");
-    strcat(HTML_String, "</form>");
-    strcat(HTML_String, "<br><hr>");
+    strcat(HTML_String, "<tr>");
+    strcat(HTML_String, "<td colspan=\"3\"><input type=\"checkbox\" onclick=\"sendVal('/?debugmDatToAOG='+this.checked)\" name=\"debugmDatToAOG\" id = \"Part\" value = \"1\" ");
+    if (SCSet.debugmodeDataToAOG == 1) strcat(HTML_String, "checked ");
+    strcat(HTML_String, "> ");
+    strcat(HTML_String, "<label for =\"Part\"> debugmode data to AgOpenGPS on</label>");
+    strcat(HTML_String, "</td></tr>");
+
+    strcat(HTML_String, "</table></form><br><hr>");
+
+
+        //-------------------------------------------------------------
+        // firmware update
+    
+    strcat(HTML_String, "<h2>Firmware Update for ESP32</h2>");
+    strcat(HTML_String, "<form>");
+    strcat(HTML_String, "<table>");
+    set_colgroup(300, 250, 150, 0, 0);
+
+    strcat(HTML_String, "<tr> <td colspan=\"3\">build a new firmware with Arduino IDE selecting</td> </tr>");
+    strcat(HTML_String, "<tr> <td colspan=\"3\">Sketch -> Export compiled Binary</td> </tr>");
+    strcat(HTML_String, "<tr> <td colspan=\"3\">upload this file via WiFi/Ethernet connection</td> </tr>");
+
+    strcat(HTML_String, "<tr> <td colspan=\"3\">&nbsp;</td> </tr>");
+    strcat(HTML_String, "<tr><td></td>");
+    //button
+    strcat(HTML_String, "<td><input type='submit' onclick='openUpload(this.form)' value='Open Firmware uploader'></td></tr>");
+
+    strcat(HTML_String, "<script>");
+    strcat(HTML_String, "function openUpload(form)");
+    strcat(HTML_String, "{");
+    strcat(HTML_String, "window.open('/serverIndex')");
+    strcat(HTML_String, "}");
+    strcat(HTML_String, "</script>");
+
+    strcat(HTML_String, "</table></form><br><hr>");
+
+    //-------------------------------------------------------------
+    strcat(HTML_String, "</font>");
+    strcat(HTML_String, "</body>");
+    strcat(HTML_String, "</html>");
+
+    //script to send values from webpage to ESP for process request
+    strcat(HTML_String, "<script>");
+    strcat(HTML_String, "function sendVal(ArgStr)");
+    strcat(HTML_String, "{");
+    strcat(HTML_String, "  var xhttp = new XMLHttpRequest();");
+    strcat(HTML_String, "  xhttp.open(\"GET\",ArgStr, true);");
+    strcat(HTML_String, "  xhttp.send();");
+    strcat(HTML_String, " if (ArgStr == '/?ACTION=");
+    strcati(HTML_String, ACTION_LoadDefaultVal);
+    strcat(HTML_String, "') { window.setTimeout('location.reload()',400); }");
+    strcat(HTML_String, "}");
+    strcat(HTML_String, "</script>");
+
+    }
+
+
+
+//-------------------------------------------------------------------------------------------------
+
+void handleNotFound() {
+    const char* notFound =
+        "<!doctype html>"
+        "<html lang = \"en\">"
+        "<head>"""
+        "<meta charset = \"utf - 8\">"
+        "<meta http - equiv = \"x - ua - compatible\" content = \"ie = edge\">"
+        "<meta name = \"viewport\" content = \"width = device - width, initial - scale = 1.0\">"
+        "<title>Redirecting</title>"
+        "</head>"
+        "<body onload = \"redirect()\">"
+        "<h1 style = \"text - align: center; padding - top: 50px; display: block; \"><br>404 not found<br><br>Redirecting to settings page in 3 secs ...</h1>"
+        "<script>"
+        "function redirect() {"
+        "setTimeout(function() {"
+        "    window.location.replace(\"/root\");"//new landing page
+        "}"
+        ", 3000);"
+        "}"
+        "</script>"
+        "</body>"
+        "</html>";
+
+    server.sendHeader("Connection", "close");
+    server.send(200, "text/html", notFound);
+    if (SCSet.debugmode) { Serial.println("redirecting from 404 not found to Webpage root"); }
+}
+
+//-------------------------------------------------------------------------------------------------
+
+void set_colgroup(int w1, int w2, int w3, int w4, int w5) {
+    strcat(HTML_String, "<colgroup>");
+    set_colgroup1(w1);
+    set_colgroup1(w2);
+    set_colgroup1(w3);
+    set_colgroup1(w4);
+    set_colgroup1(w5);
+    strcat(HTML_String, "</colgroup>");
+
+}
+//------------------------------------------------------------------------------------------
+void set_colgroup1(int ww) {
+    if (ww == 0) return;
+    strcat(HTML_String, "<col width=\"");
+    strcati(HTML_String, ww);
+    strcat(HTML_String, "\">");
+}
+//---------------------------------------------------------------------
+void strcatf(char* tx, float f, byte leng, byte dezim) {
+    char tmp[8];
+#if HardwarePlatform == 0
+    dtostrf(f, leng, dezim, tmp);//f,6,2,tmp
+#endif
+    strcat(tx, tmp);
+}
+//---------------------------------------------------------------------
+void strcati(char* tx, int i) {
+    char tmp[8];
+
+    itoa(i, tmp, 10);
+    strcat(tx, tmp);
+}
+
 
 /*
-    //---------------------------------------------------------------------------------------------  
-    // Relay PINs selection
-
-    //ESP crashes sometimes, when GPIOs are changed, Nano33iot: not enough memory HTML string lenght: 60000
-    if (SCSet.SectRelaysEquiped) {
-        strcat(HTML_String, "<h2>Relay pin setting</h2>");
-        strcat(HTML_String, "<br>");
-
-        strcat(HTML_String, "<form>");
-        strcat(HTML_String, "<table><col width=\"50\"><col width=\"50\"><col width=\"50\"><col width=\"50\"><col width=\"50\"><col width=\"50\"><col width=\"50\"><col width=\"50\"><col width=\"50\">");
-        strcat(HTML_String, "<col width = \"50\"><col width=\"50\"><col width=\"50\"><col width=\"50\"><col width=\"50\"><col width=\"50\"><col width=\"50\"><col width=\"50\">");
-
-        strcat(HTML_String, "<tr><td colspan=\"11\"><b>select for every section relay a GPIO pin</b></td>");
-        strcat(HTML_String, "<td colspan=\"3\"><button style= \"width:120px\" name=\"ACTION\" value=\"");
-        strcati(HTML_String, ACTION_SET_GPIO);
-        strcat(HTML_String, "\">Apply and Save</button></td></tr>");
-        strcat(HTML_String, "<tr><td colspan=\"17\"><b>!! NO check, if pin is selected twice!!  Use every pin only 1 time !!</b></td>");
-        strcat(HTML_String, "<tr> <td colspan=\"17\">&nbsp;</td> </tr>");
-
-        strcat(HTML_String, "<tr><td></td><td></td><td colspan=\"6\"><b>section #</b></td>");
-        strcat(HTML_String, "</tr><tr><td></td>");
-        byte num = 0;
-        for (num = 0; num < SCSet.SectNum; num++) {
-            strcat(HTML_String, "<td align=center><b>");
-            strcati(HTML_String, (num + 1));
-            strcat(HTML_String, "</b></td>");
-        }
-        strcat(HTML_String, "</tr>");
-
-        strcat(HTML_String, "<tr><td><b>GPIO</b></td>");
-        for (num = 0; num < SCSet.SectNum; num++) {//colums            
-            strcat(HTML_String, "<td><input type = \"radio\" name=\"RP");
-            strcati(HTML_String, num);
-            strcat(HTML_String, "\" id=\"Rel");
-            strcati(HTML_String, num);
-            strcat(HTML_String, "\" value=\"255\"");
-            if (SCSet.Relay_PIN[num] == 255) { strcat(HTML_String, " CHECKED"); }
-            strcat(HTML_String, "><label for=\"Rel");
-            strcati(HTML_String, num);
-            strcat(HTML_String, "\">nc</label></td>");
-        }
-        strcat(HTML_String, "</tr>");
-
-
-        for (int io = 2; io < 40; io++) {//rows
-            //skip not usabel GPIOs
-            if (io == 3) { io++; } //3: 6-11: not use! USB 12: ESP wouldn't boot
-            if (io == 6) { io = 13; }
-
-            strcat(HTML_String, "<tr><td>pin #</td>");
-            num = 0;
-            for (num = 0; num < SCSet.SectNum; num++) {//colums            
-                strcat(HTML_String, "<td><input type = \"radio\" name=\"RP");
-                strcati(HTML_String, num);
-                strcat(HTML_String, "\" id=\"R");
-                strcati(HTML_String, num);
-                strcat(HTML_String, "\" value=\"");
-                strcati(HTML_String, io);
-                strcat(HTML_String, "\"");
-                if (SCSet.Relay_PIN[num] == io) { strcat(HTML_String, " CHECKED"); }
-                strcat(HTML_String, "><label for=\"R");
-                strcati(HTML_String, num);
-                strcat(HTML_String, "\">");
-                strcati(HTML_String, io);
-                strcat(HTML_String, "</label></td>");
-            }
-            strcat(HTML_String, "</tr>");
-        }
-        strcat(HTML_String, "</table>");
-        strcat(HTML_String, "</form>");
-    }*/
-}
-//--------------------------------------------------------------------------
-void send_not_found() {
-
-	Serial.print("\nSend Not Found\n");
-
-	client_page.print("HTTP/1.1 404 Not Found\r\n\r\n");
-	delay(20);
-	//client_page.stop();
-}
-
-//--------------------------------------------------------------------------
-void send_HTML() {
-	char my_char;
-	int  my_len = strlen(HTML_String);
-	int  my_ptr = 0;
-	int  my_send = 0;
-
-	//--------------------------------------------------------------------------
-	// in Portionen senden
-	while ((my_len - my_send) > 0) {
-		my_send = my_ptr + MAX_PACKAGE_SIZE;
-		if (my_send > my_len) {
-			client_page.print(&HTML_String[my_ptr]);
-			delay(10);
-
-			//Serial.println(&HTML_String[my_ptr]);
-
-			my_send = my_len;
-		}
-		else {
-			my_char = HTML_String[my_send];
-			// Auf Anfang eines Tags positionieren
-			while (my_char != '<') my_char = HTML_String[--my_send];
-			HTML_String[my_send] = 0;
-			client_page.print(&HTML_String[my_ptr]);
-			delay(10);
-
-			//Serial.println(&HTML_String[my_ptr]);
-
-			HTML_String[my_send] = my_char;
-			my_ptr = my_send;
-		}
-	}
-	//client_page.stop();
-}
-
 //----------------------------------------------------------------------------------------------
 void set_colgroup(int w1, int w2, int w3, int w4, int w5) {
 	strcat(HTML_String, "<colgroup>");
@@ -974,3 +905,4 @@ void exhibit(const char* tx, const char* v) {
 	Serial.print(tx);
 	Serial.print(v);
 }
+*/

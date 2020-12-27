@@ -4,19 +4,19 @@ void SetRelays(void)
 		for (byte i = 0; i < 8; i++)
 		{
 			if (bitRead(RelayOUT[0], i) == LOW) {
-				digitalWrite(SCSet.Relay_PIN[i], LOW);
+				digitalWrite(SCSet.Relay_PIN[i], !SCSet.SectRelaysON);
 			}
 			else {
-				digitalWrite(SCSet.Relay_PIN[i], HIGH);
+				digitalWrite(SCSet.Relay_PIN[i], SCSet.SectRelaysON);
 			}
 		}
 		for (byte i = 8; i < SCSet.SectNum; i++)
 		{
 			if (bitRead(RelayOUT[1], (i - 8)) == LOW) {
-				digitalWrite(SCSet.Relay_PIN[i], LOW);
+				digitalWrite(SCSet.Relay_PIN[i], !SCSet.SectRelaysON);
 			}
 			else {
-				digitalWrite(SCSet.Relay_PIN[i], HIGH);
+				digitalWrite(SCSet.Relay_PIN[i], SCSet.SectRelaysON);
 			}
 		}
 		if (SCSet.debugmodeRelay) {
@@ -30,10 +30,10 @@ void SetRelays(void)
 		for (byte i = 0; i < SCSet.SectNum; i++)
 		{
 			if (bitRead(RelayOUT[0], i) == LOW) {
-				digitalWrite(SCSet.Relay_PIN[i], LOW);
+				digitalWrite(SCSet.Relay_PIN[i], !SCSet.SectRelaysON);
 			}
 			else {
-				digitalWrite(SCSet.Relay_PIN[i], HIGH);
+				digitalWrite(SCSet.Relay_PIN[i], SCSet.SectRelaysON);
 			}
 		}
 		//Serial.println(RelayOUT[0]);

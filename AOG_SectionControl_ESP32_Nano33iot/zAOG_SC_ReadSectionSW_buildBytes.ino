@@ -9,13 +9,16 @@ void SectSWRead()
 	if (SCSet.debugmodeSwitches) Serial.println("reading Section switches:");
 	for (int i = 0; i < SCSet.SectNum; i++)
 	{
-		if (SCSet.SectSW_PIN[i] < 255) { SectSWVal[i] = digitalRead(SCSet.SectSW_PIN[i]); }
+		if (SCSet.SectSW_PIN[i] < 255) { 
+			SectSWVal[i] = digitalRead(SCSet.SectSW_PIN[i]); 
+			//invert?
+			if (!SCSet.SectSWAutoOrOn) { SectSWVal[i] = !SectSWVal[i]; }
+		}
 		else { SectSWVal[i] = HIGH; }//set auto if switch is missing
-		//Documentation: spray on LOW
-		if (SCSet.DocumentationOnly && !SCSet.DocSwitchSprayOn) { SectSWVal[i] = !SectSWVal[i]; }
 		if (SCSet.debugmodeSwitches) {
 			Serial.print("  #"); Serial.print(i + 1); Serial.print(" "); Serial.print(SectSWVal[i]);
 		}
+
 	}
 	if (SCSet.debugmodeSwitches) Serial.println();
 
@@ -70,7 +73,7 @@ void SectSWRead()
 	}
 	
 	//Documentation only = set to manual, Main = ON so every section is on, or off by sections switch
-	if (SCSet.DocumentationOnly == 1) {
+	if (SCSet.DocOnly == 1) {
 		SectAuto = false;
 		SectMainOn = true;
 	}

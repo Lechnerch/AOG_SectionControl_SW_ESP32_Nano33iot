@@ -9,7 +9,7 @@ void getDataFromAOG()
 
     //get new AOG Data
     //USB
-    if ((SCSet.DataTransVia == 0) || (SCSet.DataTransVia == 4)) {
+    if ((SCSet.DataTransVia == 0) || (SCSet.DataTransVia == 1)) {
 
         while (Serial.available())
         {
@@ -47,7 +47,7 @@ void getDataFromAOG()
     
 
     //WiFi UDP 
-    if ((SCSet.DataTransVia == 1))
+    if ((SCSet.DataTransVia == 7))
     {
         //Serial.println("checking for UDP packet");
         isDataFound = false;
@@ -113,10 +113,11 @@ void getDataFromAOG()
 void AOGDataSend()
 {
     //USB
-    if ((SCSet.DataTransVia == 0) || (SCSet.DataTransVia == 4)) {
+    if ((SCSet.DataTransVia == 0) || (SCSet.DataTransVia == 1)) {
         byte idx;
-        if (SCSet.DataTransVia == 0) { idx = 2; }//8 bytes
-        else { idx = 0; }//V4 10 Bytes
+       // if (SCSet.DataTransVia == 0) { idx = 2; }//8 bytes
+      //  else {  }//V4 10 Bytes
+    idx = 0;
         for (idx; idx < DataToAOGLength; idx++) {
             Serial.print(RelayToAOG[idx]); 
             if (idx < (DataToAOGLength - 1)) { Serial.print(","); }
@@ -124,7 +125,7 @@ void AOGDataSend()
         Serial.println();
     }
 
-    if (SCSet.DataTransVia == 1)
+    if (SCSet.DataTransVia == 7)
     {
         UDPToAOG.beginPacket(SCSet.IPToAOG, SCSet.portDestination);
         for (byte idx = 0; idx < DataToAOGLength; idx++) {

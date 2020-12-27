@@ -1,6 +1,6 @@
 void motorDrive(void)
 {
-	if (SCSet.RateControlLeftEquiped == 1) {
+	if (SCSet.RateControlLeftInst == 1) {
 	//if (pwmDrive > 0) bitSet(PORTB, 4);  //set the correct direction
 	//analogWrite(SCSet.FlowPWMLeft_PIN, pwmDrive);
 	}
