@@ -7,14 +7,14 @@ void Core1code(void * pvParameters) {
 		// MAIN LOOP FOR THIS CORE
 	{
 		//delay(0); //do WIFI stuff
-		currentTime = millis();
-		unsigned int time = currentTime;
+		now = millis();
+		unsigned int time = now;
 
 		//timed loop
-		if ((currentTime - lastTime >= LOOP_TIME) || SectSWpressed)
+		if ((now - lastTime >= LOOP_TIME) || SectSWpressed)
 		{
-			dT = currentTime - lastTime;
-			lastTime = currentTime;
+			dT = now - lastTime;
+			lastTime = now;
 
 			//reset ISR Left Side
 			countsThisLoopLeft = pulseCountLeft;
@@ -96,7 +96,7 @@ void Core1code(void * pvParameters) {
 			rateErrorRight = rateSetPointRight - rateKRight;
 
 			calcRatePID();
-			if (SCSet. RateControlLeftEquiped) { motorDrive(); }
+			if (Set. RateControlLeftInst) { motorDrive(); }
 
 			//Also needs right side TODO
 			//calcRatePIDRight();
