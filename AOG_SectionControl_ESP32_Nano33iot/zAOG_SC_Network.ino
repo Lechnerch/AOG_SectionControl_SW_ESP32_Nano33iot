@@ -151,7 +151,7 @@ void WiFi_handle_connection() {
                 WiFi_connect_timer = now;
                 break;
 
-            case 20://init WiFi UDP sendng to AOG
+            case 20://init WiFi UDP sending to AOG
                 if (UDPFromAOG.begin(Set.PortSCToAOG))
                 {
                     Serial.print("UDP writing to IP: ");

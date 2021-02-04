@@ -38,6 +38,8 @@ void assignGPIOs() {
 	if (Set.FlowDirRight_PIN < 255) { pinMode(Set.FlowDirRight_PIN, OUTPUT); }
 	if (Set.FlowPWMRight_PIN < 255) { pinMode(Set.FlowPWMRight_PIN, OUTPUT); }
 
+	if (Set.SectMainSW_PIN < 255) { pinMode(Set.Relais_MainValve_PIN, OUTPUT); }
+
 	RelayOUT[0] = 0;
 	RelayOUT[1] = 0;
 	SetRelays();

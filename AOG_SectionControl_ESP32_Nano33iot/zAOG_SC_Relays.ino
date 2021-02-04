@@ -38,4 +38,8 @@ void SetRelays(void)
 		}
 		//Serial.println(RelayOUT[0]);
 	}
+	if (Set.Relais_MainValve_PIN != 255) {//main valve
+		if ((RelayOUT[0] > 0) || (RelayOUT[1] > 0)) { digitalWrite(Set.Relais_MainValve_PIN, Set.SectRelaysON); }
+		else { digitalWrite(Set.Relais_MainValve_PIN, !Set.SectRelaysON); }
+	}
 }

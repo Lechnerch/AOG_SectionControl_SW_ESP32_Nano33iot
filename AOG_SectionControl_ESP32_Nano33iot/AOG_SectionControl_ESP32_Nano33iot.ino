@@ -1,6 +1,6 @@
 
 #define HardwarePlatform  0  //0 = runs on ESP32  nano 33IoT not working at the moment 1 = run on NANO 33 IoT if changed change IO PINs too or it won't run !!!!!
-byte vers_nr = 46;
+byte vers_nr = 47;
 char VersionTXT[150] = " - 31. Januar 2021 by MTZ8302<br>(multiple WiFi networks, non blocking WiFi connection, WiFi Over The Air firmware update)";
 
 struct Storage {
@@ -30,6 +30,7 @@ struct Storage {
 	//static IP
 	byte WiFi_myip[4] = { 192, 168, 1, 71 };     // section control module 
 	byte Eth_myip[4] = { 192, 168, 1, 72 };     // section control module 
+	bool Eth_static_IP = false;					// false = use DHPC and set last number to 72 (x.x.x.72) / true = use IP as set above
 	byte WiFi_gwip[4] = { 192, 168, 1, 1 };      // Gateway IP only used if Accesspoint created
 	byte mask[4] = { 255, 255, 255, 0 };
 	byte myDNS[4] = { 8, 8, 8, 8 };         //optional
@@ -70,6 +71,7 @@ struct Storage {
 	uint8_t SectRelaysON = 1;					        //relays spray on 1 or 0 (high or low)
 	uint8_t Relay_PIN[16] = { 15,2,0,4,16,17,18,19,21,255,255,255,255,255,255,255 };  //GPIOs of ESP32 OUT to sections of sprayer HIGH/3.3V = ON
                           //Relay pin set for nano 33 iot:  //     { 10,9,8,7,6,5,255,255,255,255,255,255,255,255,255,255 };
+	uint8_t Relais_MainValve_PIN = 255;		//PIN for Main fluid valve 255 = unused
 	uint8_t SectSWInst = 1;					      //1 if section input switches are equiped, else: 0	
 	uint8_t SectSWAutoOrOn = 1;						//Section switches spray/auto on 1 = high = used with pullup, 0 = low = pulldown 
 
@@ -304,12 +306,13 @@ void setup()
 	if ((Set.RateSWLeftInst == 1) || (Set.RateSWRightInst == 1)) { RateSWRead(); }
 	if (Set.RateControlLeftInst == 0) { motorDrive(); } //if Manual do everytime, not only in timed loop
 
-//start Ethernet
+	//start Ethernet
 //	if (Set.DataTransVia == 10) { Eth_Start(); }
 
 	//start connection process, call in loop everytime!
 	WiFi_connect_step = 10;
 	WebIORunning = false;
+	UDP_running = false;
 	WiFi_handle_connection();
 
 	if (Set.DataTransVia == 0) { Serial.println("data transfer via USB 10 Byte sentence AOG V4"); }
