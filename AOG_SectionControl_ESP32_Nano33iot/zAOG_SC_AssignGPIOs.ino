@@ -3,9 +3,12 @@ void assignGPIOs() {
 	for (int i = 0; i < SCSet.SectNum; i++)
 	{
 		if (SCSet.SectSWEquiped) {
+      Serial.println("SectSWEquiped");
 			if (SCSet.SectSW_PIN[i] < 255) { pinMode(SCSet.SectSW_PIN[i], INPUT_PULLUP); }
 			else { Serial.print("no PIN set for section switch #"); Serial.println(i+1); }
-			if (SCSet.Relay_PIN[i] < 255) { pinMode(SCSet.Relay_PIN[i], OUTPUT); }
+			if (SCSet.Relay_PIN[i] < 255) { pinMode(SCSet.Relay_PIN[i], OUTPUT); 
+			Serial.println("Test");
+			}
 			else { Serial.print("no PIN set for section relay #"); Serial.println(i+1); }
 		}
 	}

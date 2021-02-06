@@ -6,23 +6,23 @@ struct Storage {
 	
 	uint8_t DataTransVia = 1;         //transfer data via 0: USB, 1: WiFi, 4: USB 10 byte format for AOG V4
 									   
-	uint8_t LEDWiFi_PIN = 5;//13;     // WiFi Status LED 0 = off
-	uint8_t LEDWiFi_ON_Level = 1;     // 1 = HIGH = LED on high, 0 = LOW = LED on low
+	uint8_t LEDWiFi_PIN = 16;//13;     // WiFi Status LED 0 = off
+	uint8_t LEDWiFi_ON_Level = 0;     // 1 = HIGH = LED on high, 0 = LOW = LED on low
 
 	//WiFi---------------------------------------------------------------------------------------------
 	//tractors WiFi
-	char ssid[24] = "GPS_unit_ESP_M8T";       // WiFi network Client name
-	char password[24] = "";                   // WiFi network password//Accesspoint name and password
-	char ssid2[24] = "Deutz_6006";            // WiFi network Client name
-	char password2[24] = "";                  // WiFi network password//Accesspoint name and password
+	char ssid[24] = "HUAWEI-5F9B";       // WiFi network Client name
+	char password[24] = "94425292";                   // WiFi network password//Accesspoint name and password
+	char ssid2[24] = "WLANLechner";            // WiFi network Client name
+	char password2[24] = "08880888";                  // WiFi network password//Accesspoint name and password
 	char ssid_ap[24] = "SectionControlNet";   // name of Access point, if no WiFi found, no password!!
-	uint8_t timeoutRouter = 20;               //time (s) to search for existing WiFi, than starting Accesspoint 
+	uint8_t timeoutRouter = 5;               //time (s) to search for existing WiFi, than starting Accesspoint 
 	uint8_t timeoutRouter2 = 5;               //time (s) to search for existing WiFi, than starting Accesspoint 
 	//static IP
-	uint8_t myip[4] = { 192, 168, 1, 71 };    // section control module; in DHCP Network replaced by x.x.x.71 = myIPEnding
-	uint8_t gwip[4] = { 192, 168, 1, 1 };     // Gateway IP also used if Accesspoint created; in DHCP network replaced by networks GW IP
+	uint8_t myip[4] = { 10, 0, 0, 71 };    // section control module; in DHCP Network replaced by x.x.x.71 = myIPEnding
+	uint8_t gwip[4] = { 10, 0, 0, 138 };     // Gateway IP also used if Accesspoint created; in DHCP network replaced by networks GW IP
 	uint8_t mask[4] = { 255, 255, 255, 0 };
-	uint8_t IPToAOG[4] = { 192,168,1,255 };   // 255 = broadcast; in DHCP Network replaced by x.x.x.255
+	uint8_t IPToAOG[4] = { 10,0,0,255 };   // 255 = broadcast; in DHCP Network replaced by x.x.x.255
 	uint8_t myIPEnding = 71;
 	uint16_t PortSCToAOG = 5555;              //this is port of this module: Autosteer = 5577 IMU = 5566 Section Control = 5555 GPS = 5544
 	uint16_t PortFromAOG = 8888;              // port to listen for AOG
@@ -36,12 +36,12 @@ struct Storage {
 //Example1: motor valve is controled only by Switch not by AOG, no Flowmeter, : RateControl..Equiped = false; RateSW..Equiped = true; RateControlPWM = false;
 //Example2: PWM valve, with flowmeter all controled by AOG:   RateControl..Equiped = true; RateSW..Equiped = true; RateControlPWM = true;	
 	uint8_t RateControlLeftEquiped = 0;		    //1 if Rate control is there, else: 0
-	uint8_t RateSWLeftEquiped = 1;			      //1 if Rate control Pressure switch is there, else: 0
-	uint8_t RateSWLeft_PIN = 34;//A6;				  //Rate +/- switch
+	uint8_t RateSWLeftEquiped = 0;			      //1 if Rate control Pressure switch is there, else: 0
+	uint8_t RateSWLeft_PIN = 255;//A6;				  //Rate +/- switch
 	uint8_t RateControlPWM = 0;				        //1 if PWM valve, 0 if Motor drive for pressure change		
 
-	uint8_t	FlowDirLeft_PIN = 23;//11;				//Rate-Control Valve/Motor Direktion
-	uint8_t	FlowPWMLeft_PIN = 22;//12;				//Rate-Control Valve PWM/Motor ON/OFF
+	uint8_t	FlowDirLeft_PIN = 255;//11;				//Rate-Control Valve/Motor Direktion
+	uint8_t	FlowPWMLeft_PIN = 255;//12;				//Rate-Control Valve PWM/Motor ON/OFF
 	uint8_t	FlowEncALeft_PIN = 255;				    //Flowmeter left/1
 
 	uint8_t RateControlRightEquiped = 0;	    //1 if Rate control is there, else: 0
@@ -52,23 +52,25 @@ struct Storage {
 	uint8_t	FlowEncARight_PIN = 255;				  //Flowmeter right/2 
 	
 
-	uint8_t SectNum = 6;	                    // number of sections equiped max 16 (in AOG)
+	uint8_t SectNum = 12;	                    // number of sections equiped max 16 (in AOG)
 	uint8_t SectRelaysEquiped = 1;				    //relays for SC output are equiped (0=no output, only documentation)
 	uint8_t SectRelaysON = 1;					        //relays spray on 1 or 0 (high or low)
-	uint8_t Relay_PIN[16] = { 15,2,4,16,17,255,18,19,21,255,255,255,255,255,255,255 };   		//GPIOs of ESP32 OUT to sections of sprayer HIGH/3.3V = ON
+//	uint8_t Relay_PIN[16] = { 23,22,21,19,18,5,17,16,4,0,2,15,255,255,255,255 };   		//GPIOs of ESP32 OUT to sections of sprayer HIGH/3.3V = ON
+  uint8_t Relay_PIN[16] = { 23,22,21,19,18,5,17,16,4,0,15,8,255,255,255,255 };      //GPIOs of ESP32 OUT to sections of sprayer HIGH/3.3V = ON
+
                           //Relay pin set for nano 33 iot:  //{ 10,9,8,7,6,5,255,255,255,255,255,255,255,255,255,255 };     
-	uint8_t SectSWEquiped = 1;					      //1 if section input switches are equiped, else: 0	
-	uint8_t SectSW_PIN[16] = { 13,12,14,27,26,25,33,255,255,255,255,255,255,255,255,255 };   //section switches to GPIOs of ESP32 GND = section off, open/+3.3V section auto/on
+	uint8_t SectSWEquiped = 0;					      //1 if section input switches are equiped, else: 0	
+	uint8_t SectSW_PIN[16] = { 255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255 };   //section switches to GPIOs of ESP32 GND = section off, open/+3.3V section auto/on
                           //Switch pin set for nano 33 iot:  // { A0,A1,A2,A3,A4,A5,3,255,255,255,255,255,255,255,255,255 };
-	uint8_t	SectMainSWType = 1;						    // 0 = not equiped 1 = (ON)-OFF-(ON) toggle switch or push buttons 2 = connected to hitch level sensor 3 = inverted hitch level sensor
+	uint8_t	SectMainSWType = 0;						    // 0 = not equiped 1 = (ON)-OFF-(ON) toggle switch or push buttons 2 = connected to hitch level sensor 3 = inverted hitch level sensor
 	uint16_t	HitchLevelVal = 2000;//	500;		// Value for hitch level: switch AOG section control to Auto if lower than... ESP:2000 nano 500
-	uint8_t	SectMainSW_PIN = 32;//A7;					//ESP32 to AOG Main auto toggle switch open=nothing/AOG button GND=OFF +3,3=AOG Auto on	OR connected to hitch level sensor	
-		uint8_t	SectAutoManSW_PIN = 39;//4;			// Main Auto/Manual switch 39:!!no internal pullup!!
+	uint8_t	SectMainSW_PIN = 255;//A7;					//ESP32 to AOG Main auto toggle switch open=nothing/AOG button GND=OFF +3,3=AOG Auto on	OR connected to hitch level sensor	
+		uint8_t	SectAutoManSW_PIN = 255;//4;			// Main Auto/Manual switch 39:!!no internal pullup!!
 
 	uint8_t DocumentationOnly = 0;					  // 0: use as section control, 1: Documentation only = AOG writes the state of the input switches
 	uint8_t DocSwitchSprayOn = LOW;
 
-	uint8_t DataToAOGHeader[2] = { 127,249 }, DataFromAOGHeader[2] = { 127, 250 }, SettingsFromAOGHeader[2] = { 127,248 }, n = 0xF8;
+	uint8_t DataToAOGHeader[2] = { 127,249 }, DataFromAOGHeader[2] = { 127, 250 }, SettingsFromAOGHeader[2] = { 127, }, n = 0xF8;
 	uint8_t DataToAOGLength = 10;             //items per UDP packet
 	uint8_t DataFromAOGLength = 10;           //items comming from AOG 
 	uint8_t SettingsFromAOGLength = 10;
@@ -76,14 +78,14 @@ struct Storage {
 	bool debugmode = false;
 	bool debugmodeRelay = false;
 	bool debugmodeSwitches = false;
-	bool debugmodeDataFromAOG = false;
+	bool debugmodeDataFromAOG = true;
 	bool debugmodeDataToAOG = false;
 
  // END of user config ****************************************************************************
 }; Storage SCSet;
 
 
-bool EEPROM_clear = false;
+bool EEPROM_clear = true;
 
 
 // WiFi 
@@ -91,7 +93,7 @@ byte my_WiFi_Mode = 0;  // WIFI_STA = 1 = Workstation  WIFI_AP = 2  = Accesspoin
 byte NetWorkNum = 1;
 int pingResult, WiFiWatchDog = 0;
 bool UDP_running = false;
-unsigned long WebInterfaceTimeOut = 0, PingToNetworkLastTime = 0;
+unsigned long WebInterfaceTimeOut = 30000, PingToNetworkLastTime = 0;
 
 // WiFi LED blink times: searching WIFI: blinking 4x faster; connected: blinking as times set; data available: light on; no data for 2 seconds: blinking
 unsigned int LED_WIFI_time = 0;
@@ -260,7 +262,7 @@ void setup()
 	RelayToAOGOld[0] = SCSet.DataToAOGHeader[0];
 	RelayToAOG[1] = SCSet.DataToAOGHeader[1];
 	RelayToAOGOld[1] = SCSet.DataToAOGHeader[1];
-	
+
 	//set GPIOs
 	assignGPIOs();
 
